@@ -6,7 +6,7 @@ import os
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
-TOKEN = os.getenv("DISCORD_TOKEN")
+TOKEN = os.getenv("TOKEN")
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS whitelist (
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS settings (
     guild_id INTEGER PRIMARY KEY,
+    log_channel_id INTEGER,
     anti_role_delete INTEGER DEFAULT 0,
     anti_guild_rename INTEGER DEFAULT 0,
     anti_channel_delete INTEGER DEFAULT 0,
@@ -47,6 +48,25 @@ db.commit()
 def ensure_guild_settings(guild_id):
     cursor.execute("INSERT OR IGNORE INTO settings (guild_id) VALUES (?)", (guild_id,))
     db.commit()
+
+def get_log_channel(guild):
+    cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id=?", (guild.id,))
+    data = cursor.fetchone()
+    if data and data[0]:
+        return guild.get_channel(data[0])
+    return None
+
+async def send_log(guild, title, description, color=discord.Color.red()):
+    channel = get_log_channel(guild)
+    if not channel:
+        return
+    embed = discord.Embed(
+        title=title,
+        description=description,
+        color=color,
+        timestamp=datetime.now(timezone.utc)
+    )
+    await channel.send(embed=embed)
 
 def is_whitelisted(user_id):
     cursor.execute("SELECT 1 FROM whitelist WHERE user_id=?", (user_id,))
@@ -66,11 +86,22 @@ async def punish_user(member, reason):
 
     if is_blacklisted(member.id):
         await member.ban(reason=f"黑名單再次違規: {reason}")
+        await send_log(
+            member.guild,
+            "🚫 黑名單再次違規",
+            f"使用者: {member.mention}\n原因: {reason}\n處罰: 永久封鎖"
+        )
         return
 
     add_blacklist(member.id)
     until = datetime.now(timezone.utc) + timedelta(seconds=60)
     await member.timeout(until, reason=reason)
+
+    await send_log(
+        member.guild,
+        "⚠ 使用者違規",
+        f"使用者: {member.mention}\n原因: {reason}\n處罰: Timeout 60秒 + 加入黑名單"
+    )
 
 # =========================
 # 啟動
@@ -81,7 +112,7 @@ async def on_ready():
     print(f"🤖 已登入 {bot.user}")
 
 # =========================
-# 反刷頻系統
+# 反刷頻
 # =========================
 message_tracker = defaultdict(list)
 mention_tracker = defaultdict(list)
@@ -97,14 +128,14 @@ async def on_message(message):
     message_tracker[message.author.id].append(now)
     message_tracker[message.author.id] = [
         t for t in message_tracker[message.author.id]
-        if now - t < 5
+        if now - t < 6
     ]
 
-    if len(message_tracker[message.author.id]) >= 5:
+    if len(message_tracker[message.author.id]) >= 8:
         await punish_user(message.author, "刷頻")
         return
 
-    # 3秒3次 everyone
+    # 3秒3次 @everyone
     if "@everyone" in message.content:
         mention_tracker[message.author.id].append(now)
         mention_tracker[message.author.id] = [
@@ -123,74 +154,11 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # =========================
-# 防刪角色
-# =========================
-@bot.event
-async def on_guild_role_delete(role):
-    ensure_guild_settings(role.guild.id)
-
-    cursor.execute("SELECT anti_role_delete FROM settings WHERE guild_id=?", (role.guild.id,))
-    if cursor.fetchone()[0] == 0:
-        return
-
-    async for entry in role.guild.audit_logs(limit=1, action=discord.AuditLogAction.role_delete):
-        user = entry.user
-        break
-
-    if user.bot:
-        return
-
-    await punish_user(user, "未授權刪除角色")
-
-# =========================
-# 防改伺服器名稱
-# =========================
-@bot.event
-async def on_guild_update(before, after):
-    ensure_guild_settings(after.id)
-
-    cursor.execute("SELECT anti_guild_rename FROM settings WHERE guild_id=?", (after.id,))
-    if cursor.fetchone()[0] == 0:
-        return
-
-    if before.name != after.name:
-        async for entry in after.audit_logs(limit=1, action=discord.AuditLogAction.guild_update):
-            user = entry.user
-            break
-
-        if user.bot:
-            return
-
-        await after.edit(name=before.name)
-        await punish_user(user, "未授權修改伺服器名稱")
-
-# =========================
-# 防刪頻道（含分類）
-# =========================
-@bot.event
-async def on_guild_channel_delete(channel):
-    ensure_guild_settings(channel.guild.id)
-
-    cursor.execute("SELECT anti_channel_delete FROM settings WHERE guild_id=?", (channel.guild.id,))
-    if cursor.fetchone()[0] == 0:
-        return
-
-    async for entry in channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_delete):
-        user = entry.user
-        break
-
-    if user.bot:
-        return
-
-    await punish_user(user, "未授權刪除頻道或分類")
-
-# =========================
-# 防新增頻道（含分類）
+# 事件防護
 # =========================
 @bot.event
 async def on_guild_channel_create(channel):
     ensure_guild_settings(channel.guild.id)
-
     cursor.execute("SELECT anti_channel_create FROM settings WHERE guild_id=?", (channel.guild.id,))
     if cursor.fetchone()[0] == 0:
         return
@@ -206,21 +174,29 @@ async def on_guild_channel_create(channel):
     await channel.delete()
 
 # =========================
-# Slash 指令
+# Slash 指令（全部有介紹）
 # =========================
 
-@bot.tree.command(name="加入黑名單")
+@bot.tree.command(name="設置日誌頻道", description="設定機器人發送違規與防護紀錄的頻道")
+async def set_log_channel(interaction: discord.Interaction, 頻道: discord.TextChannel):
+    ensure_guild_settings(interaction.guild.id)
+    cursor.execute("UPDATE settings SET log_channel_id=? WHERE guild_id=?",
+                   (頻道.id, interaction.guild.id))
+    db.commit()
+    await interaction.response.send_message(f"✅ 日誌頻道已設為 {頻道.mention}")
+
+@bot.tree.command(name="加入黑名單", description="將指定使用者加入黑名單")
 async def add_black(interaction: discord.Interaction, member: discord.Member):
     add_blacklist(member.id)
-    await interaction.response.send_message("已加入黑名單")
+    await interaction.response.send_message(f"🚫 {member.mention} 已加入黑名單")
 
-@bot.tree.command(name="移除黑名單")
+@bot.tree.command(name="移除黑名單", description="將指定使用者移出黑名單")
 async def remove_black(interaction: discord.Interaction, member: discord.Member):
     cursor.execute("DELETE FROM blacklist WHERE user_id=?", (member.id,))
     db.commit()
-    await interaction.response.send_message("已移除黑名單")
+    await interaction.response.send_message(f"✅ {member.mention} 已移出黑名單")
 
-@bot.tree.command(name="查看黑名單")
+@bot.tree.command(name="查看黑名單", description="查看全伺服器黑名單成員")
 async def view_black(interaction: discord.Interaction):
     cursor.execute("SELECT user_id FROM blacklist")
     data = cursor.fetchall()
@@ -230,19 +206,19 @@ async def view_black(interaction: discord.Interaction):
     msg = "\n".join([f"<@{u[0]}>" for u in data])
     await interaction.response.send_message(msg)
 
-@bot.tree.command(name="加入白名單")
+@bot.tree.command(name="加入白名單", description="將指定使用者加入白名單（不受防護影響）")
 async def add_white(interaction: discord.Interaction, member: discord.Member):
     cursor.execute("INSERT OR IGNORE INTO whitelist (user_id) VALUES (?)", (member.id,))
     db.commit()
-    await interaction.response.send_message("已加入白名單")
+    await interaction.response.send_message(f"✅ {member.mention} 已加入白名單")
 
-@bot.tree.command(name="移除白名單")
+@bot.tree.command(name="移除白名單", description="將指定使用者移出白名單")
 async def remove_white(interaction: discord.Interaction, member: discord.Member):
     cursor.execute("DELETE FROM whitelist WHERE user_id=?", (member.id,))
     db.commit()
-    await interaction.response.send_message("已移除白名單")
+    await interaction.response.send_message(f"🚫 {member.mention} 已移出白名單")
 
-@bot.tree.command(name="查看白名單")
+@bot.tree.command(name="查看白名單", description="查看全伺服器白名單成員")
 async def view_white(interaction: discord.Interaction):
     cursor.execute("SELECT user_id FROM whitelist")
     data = cursor.fetchall()
@@ -251,38 +227,6 @@ async def view_white(interaction: discord.Interaction):
         return
     msg = "\n".join([f"<@{u[0]}>" for u in data])
     await interaction.response.send_message(msg)
-
-# =========================
-# 開關指令
-# =========================
-
-@bot.tree.command(name="防刪角色")
-async def toggle_role(interaction: discord.Interaction, 狀態: bool):
-    ensure_guild_settings(interaction.guild.id)
-    cursor.execute("UPDATE settings SET anti_role_delete=? WHERE guild_id=?", (int(狀態), interaction.guild.id))
-    db.commit()
-    await interaction.response.send_message("設定完成")
-
-@bot.tree.command(name="防改名稱")
-async def toggle_rename(interaction: discord.Interaction, 狀態: bool):
-    ensure_guild_settings(interaction.guild.id)
-    cursor.execute("UPDATE settings SET anti_guild_rename=? WHERE guild_id=?", (int(狀態), interaction.guild.id))
-    db.commit()
-    await interaction.response.send_message("設定完成")
-
-@bot.tree.command(name="防刪頻道")
-async def toggle_channel_delete(interaction: discord.Interaction, 狀態: bool):
-    ensure_guild_settings(interaction.guild.id)
-    cursor.execute("UPDATE settings SET anti_channel_delete=? WHERE guild_id=?", (int(狀態), interaction.guild.id))
-    db.commit()
-    await interaction.response.send_message("設定完成")
-
-@bot.tree.command(name="防新增頻道")
-async def toggle_channel_create(interaction: discord.Interaction, 狀態: bool):
-    ensure_guild_settings(interaction.guild.id)
-    cursor.execute("UPDATE settings SET anti_channel_create=? WHERE guild_id=?", (int(狀態), interaction.guild.id))
-    db.commit()
-    await interaction.response.send_message("設定完成")
 
 # =========================
 
