@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import sqlite3
+import matplotlib.pyplot as plt
 import os
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
@@ -40,6 +41,14 @@ CREATE TABLE IF NOT EXISTS settings (
 )
 """)
 
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS stats (
+    guild_id INTEGER PRIMARY KEY,
+    total_timeouts INTEGER DEFAULT 0,
+    total_bans INTEGER DEFAULT 0
+)
+""")
+
 db.commit()
 
 # =========================
@@ -47,6 +56,7 @@ db.commit()
 # =========================
 def ensure_guild_settings(guild_id):
     cursor.execute("INSERT OR IGNORE INTO settings (guild_id) VALUES (?)", (guild_id,))
+    cursor.execute("INSERT OR IGNORE INTO stats (guild_id) VALUES (?)", (guild_id,))
     db.commit()
 
 def get_log_channel(guild):
@@ -84,8 +94,18 @@ async def punish_user(member, reason):
     if is_whitelisted(member.id):
         return
 
+    ensure_guild_settings(member.guild.id)
+
     if is_blacklisted(member.id):
         await member.ban(reason=f"黑名單再次違規: {reason}")
+
+        cursor.execute("""
+            UPDATE stats
+            SET total_bans = total_bans + 1
+            WHERE guild_id=?
+        """, (member.guild.id,))
+        db.commit()
+
         await send_log(
             member.guild,
             "🚫 黑名單再次違規",
@@ -94,8 +114,16 @@ async def punish_user(member, reason):
         return
 
     add_blacklist(member.id)
+
     until = datetime.now(timezone.utc) + timedelta(seconds=60)
     await member.timeout(until, reason=reason)
+
+    cursor.execute("""
+        UPDATE stats
+        SET total_timeouts = total_timeouts + 1
+        WHERE guild_id=?
+    """, (member.guild.id,))
+    db.commit()
 
     await send_log(
         member.guild,
@@ -228,9 +256,101 @@ async def view_white(interaction: discord.Interaction):
     msg = "\n".join([f"<@{u[0]}>" for u in data])
     await interaction.response.send_message(msg)
 
+@bot.tree.command(name="後台統計", description="查看機器人封鎖與處罰統計")
+async def backend_stats(interaction: discord.Interaction):
+    ensure_guild_settings(interaction.guild.id)
+
+    cursor.execute("""
+        SELECT total_timeouts, total_bans
+        FROM stats
+        WHERE guild_id=?
+    """, (interaction.guild.id,))
+    data = cursor.fetchone()
+
+    timeouts = data[0]
+    bans = data[1]
+
+    embed = discord.Embed(
+        title="📊 機器人統計後台",
+        color=discord.Color.blue()
+    )
+
+    embed.add_field(name="Timeout 次數", value=str(timeouts))
+    embed.add_field(name="Ban 次數", value=str(bans))
+    embed.add_field(name="總處罰次數", value=str(timeouts + bans))
+
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="統計圖表", description="生成封鎖與禁言統計圖表")
+async def stats_chart(interaction: discord.Interaction):
+    ensure_guild_settings(interaction.guild.id)
+
+    cursor.execute("""
+        SELECT total_timeouts, total_bans
+        FROM stats
+        WHERE guild_id=?
+    """, (interaction.guild.id,))
+    data = cursor.fetchone()
+
+    labels = ["Timeout", "Ban"]
+    values = [data[0], data[1]]
+
+    plt.figure()
+    plt.bar(labels, values)
+    plt.title("Bot Moderation Statistics")
+    plt.xlabel("Type")
+    plt.ylabel("Count")
+
+    file_path = "stats.png"
+    plt.savefig(file_path)
+    plt.close()
+
+    await interaction.response.send_message(file=discord.File(file_path))
+
+@bot.tree.command(name="防護狀態", description="查看目前防炸系統開關狀態")
+async def protection_status(interaction: discord.Interaction):
+    ensure_guild_settings(interaction.guild.id)
+
+    cursor.execute("""
+        SELECT anti_role_delete,
+               anti_guild_rename,
+               anti_channel_delete,
+               anti_channel_create
+        FROM settings
+        WHERE guild_id=?
+    """, (interaction.guild.id,))
+    data = cursor.fetchone()
+
+    embed = discord.Embed(
+        title="🛡 防護系統狀態",
+        color=discord.Color.green()
+    )
+
+    embed.add_field(name="防刪角色", value="開啟" if data[0] else "關閉")
+    embed.add_field(name="防改名稱", value="開啟" if data[1] else "關閉")
+    embed.add_field(name="防刪頻道", value="開啟" if data[2] else "關閉")
+    embed.add_field(name="防新增頻道", value="開啟" if data[3] else "關閉")
+
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="機器人狀態", description="查看機器人上線狀態與延遲")
+async def bot_status(interaction: discord.Interaction):
+    latency = round(bot.latency * 1000)
+
+    embed = discord.Embed(
+        title="🤖 機器人狀態",
+        color=discord.Color.purple()
+    )
+
+    embed.add_field(name="上線狀態", value="🟢 Online")
+    embed.add_field(name="延遲", value=f"{latency} ms")
+
+    await interaction.response.send_message(embed=embed)
+
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
