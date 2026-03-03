@@ -39,7 +39,9 @@ CREATE TABLE IF NOT EXISTS settings (
     anti_channel_delete INTEGER DEFAULT 0,
     anti_channel_create INTEGER DEFAULT 0
 )
-""")anti_settings = {
+""")
+
+anti_settings = {
     "anti_channel_create": True,
     "anti_channel_delete": True,
     "anti_role_delete": True,
@@ -450,6 +452,7 @@ async def anti_guild_update(interaction: discord.Interaction, state: str):
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
