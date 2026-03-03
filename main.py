@@ -39,8 +39,12 @@ CREATE TABLE IF NOT EXISTS settings (
     anti_channel_delete INTEGER DEFAULT 0,
     anti_channel_create INTEGER DEFAULT 0
 )
-""")
-
+""")anti_settings = {
+    "anti_channel_create": True,
+    "anti_channel_delete": True,
+    "anti_role_delete": True,
+    "anti_guild_update": True
+}
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS stats (
     guild_id INTEGER PRIMARY KEY,
@@ -48,6 +52,8 @@ CREATE TABLE IF NOT EXISTS stats (
     total_bans INTEGER DEFAULT 0
 )
 """)
+
+
 
 db.commit()
 
@@ -347,9 +353,103 @@ async def bot_status(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed)
 
+from discord import app_commands
+
+# ===============================
+#  防炸系統開關
+# ===============================
+
+anti_settings = {
+    "anti_channel_create": True,
+    "anti_channel_delete": True,
+    "anti_role_delete": True,
+    "anti_guild_update": True
+}
+
+def check_admin(interaction: discord.Interaction):
+    return interaction.user.guild_permissions.administrator
+
+
+@tree.command(name="anti_channel_create", description="防新增頻道 開關")
+@app_commands.check(check_admin)
+async def anti_channel_create(interaction: discord.Interaction, state: str):
+    state = state.lower()
+    if state not in ["on", "off"]:
+        await interaction.response.send_message("請輸入 on 或 off", ephemeral=True)
+        return
+
+    anti_settings["anti_channel_create"] = state == "on"
+
+    embed = discord.Embed(
+        title="🛡 防新增頻道",
+        description=f"狀態已設為 **{state.upper()}**",
+        color=0x00ffcc if state == "on" else 0xff4444
+    )
+
+    await interaction.response.send_message(embed=embed)
+
+
+@tree.command(name="anti_channel_delete", description="防刪頻道 開關")
+@app_commands.check(check_admin)
+async def anti_channel_delete(interaction: discord.Interaction, state: str):
+    state = state.lower()
+    if state not in ["on", "off"]:
+        await interaction.response.send_message("請輸入 on 或 off", ephemeral=True)
+        return
+
+    anti_settings["anti_channel_delete"] = state == "on"
+
+    embed = discord.Embed(
+        title="🛡 防刪頻道",
+        description=f"狀態已設為 **{state.upper()}**",
+        color=0x00ffcc if state == "on" else 0xff4444
+    )
+
+    await interaction.response.send_message(embed=embed)
+
+
+@tree.command(name="anti_role_delete", description="防刪角色 開關")
+@app_commands.check(check_admin)
+async def anti_role_delete(interaction: discord.Interaction, state: str):
+    state = state.lower()
+    if state not in ["on", "off"]:
+        await interaction.response.send_message("請輸入 on 或 off", ephemeral=True)
+        return
+
+    anti_settings["anti_role_delete"] = state == "on"
+
+    embed = discord.Embed(
+        title="🛡 防刪角色",
+        description=f"狀態已設為 **{state.upper()}**",
+        color=0x00ffcc if state == "on" else 0xff4444
+    )
+
+    await interaction.response.send_message(embed=embed)
+
+
+@tree.command(name="anti_guild_update", description="防改伺服器名稱 開關")
+@app_commands.check(check_admin)
+async def anti_guild_update(interaction: discord.Interaction, state: str):
+    state = state.lower()
+    if state not in ["on", "off"]:
+        await interaction.response.send_message("請輸入 on 或 off", ephemeral=True)
+        return
+
+    anti_settings["anti_guild_update"] = state == "on"
+
+    embed = discord.Embed(
+        title="🛡 防改伺服器名稱",
+        description=f"狀態已設為 **{state.upper()}**",
+        color=0x00ffcc if state == "on" else 0xff4444
+    )
+
+    await interaction.response.send_message(embed=embed)
+
+
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
