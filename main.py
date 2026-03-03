@@ -41,12 +41,7 @@ CREATE TABLE IF NOT EXISTS settings (
 )
 """)
 
-anti_settings = {
-    "anti_channel_create": True,
-    "anti_channel_delete": True,
-    "anti_role_delete": True,
-    "anti_guild_update": True
-}
+
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS stats (
     guild_id INTEGER PRIMARY KEY,
@@ -148,72 +143,100 @@ async def on_ready():
     print(f"🤖 已登入 {bot.user}")
 
 # =========================
-# 反刷頻
-# =========================
-message_tracker = defaultdict(list)
-mention_tracker = defaultdict(list)
-
-@bot.event
-async def on_guild_channel_create(channel):
-
-    if not anti_settings["anti_channel_create"]:
-        return
-
-    now = datetime.now().timestamp()
-
-    # 6秒8則
-    message_tracker[message.author.id].append(now)
-    message_tracker[message.author.id] = [
-        t for t in message_tracker[message.author.id]
-        if now - t < 6
-    ]
-
-    if len(message_tracker[message.author.id]) >= 8:
-        await punish_user(message.author, "刷頻")
-        return
-
-    # 3秒3次 @everyone
-    if "@everyone" in message.content:
-        mention_tracker[message.author.id].append(now)
-        mention_tracker[message.author.id] = [
-            t for t in mention_tracker[message.author.id]
-            if now - t < 3
-        ]
-
-        if len(mention_tracker[message.author.id]) >= 3:
-            await punish_user(message.author, "短時間多次@everyone")
-            return
-
-        if message.content.count("@everyone") > 2:
-            await punish_user(message.author, "單則大量@everyone")
-            return
-
-    await bot.process_commands(message)
-
-# =========================
 # 事件防護
 # =========================
 @bot.event
 async def on_guild_channel_create(channel):
-
-    if not anti_settings["anti_channel_create"]:
-        return
-        
     ensure_guild_settings(channel.guild.id)
-    cursor.execute("SELECT anti_channel_create FROM settings WHERE guild_id=?", (channel.guild.id,))
+
+    cursor.execute(
+        "SELECT anti_channel_create FROM settings WHERE guild_id=?",
+        (channel.guild.id,)
+    )
     if cursor.fetchone()[0] == 0:
         return
 
     async for entry in channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_create):
         user = entry.user
         break
+    else:
+        return
 
     if user.bot:
         return
 
-    await punish_user(user, "未授權新增頻道或分類")
+    await punish_user(user, "未授權新增頻道")
     await channel.delete()
 
+@bot.event
+async def on_guild_channel_delete(channel):
+    ensure_guild_settings(channel.guild.id)
+
+    cursor.execute(
+        "SELECT anti_channel_delete FROM settings WHERE guild_id=?",
+        (channel.guild.id,)
+    )
+    if cursor.fetchone()[0] == 0:
+        return
+
+    async for entry in channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_delete):
+        user = entry.user
+        break
+    else:
+        return
+
+    if user.bot:
+        return
+
+    await punish_user(user, "未授權刪除頻道")
+
+@bot.event
+async def on_guild_role_delete(role):
+    ensure_guild_settings(role.guild.id)
+
+    cursor.execute(
+        "SELECT anti_role_delete FROM settings WHERE guild_id=?",
+        (role.guild.id,)
+    )
+    if cursor.fetchone()[0] == 0:
+        return
+
+    async for entry in role.guild.audit_logs(limit=1, action=discord.AuditLogAction.role_delete):
+        user = entry.user
+        break
+    else:
+        return
+
+    if user.bot:
+        return
+
+    await punish_user(user, "未授權刪除角色")
+
+@bot.event
+async def on_guild_update(before, after):
+    ensure_guild_settings(after.id)
+
+    cursor.execute(
+        "SELECT anti_guild_rename FROM settings WHERE guild_id=?",
+        (after.id,)
+    )
+    if cursor.fetchone()[0] == 0:
+        return
+
+    if before.name == after.name:
+        return
+
+    async for entry in after.audit_logs(limit=1, action=discord.AuditLogAction.guild_update):
+        user = entry.user
+        break
+    else:
+        return
+
+    if user.bot:
+        return
+
+    await punish_user(user, "未授權修改伺服器名稱")
+    
 # =========================
 # Slash 指令（全部有介紹）
 # =========================
@@ -377,80 +400,133 @@ def check_admin(interaction: discord.Interaction):
     return interaction.user.guild_permissions.administrator
 
 
-@bot.tree.command(name="防新增頻道開關", description="防新增頻道 開 or 關")
-@app_commands.check(check_admin)
-async def anti_channel_create(interaction: discord.Interaction, state: str):
-    state = state.lower()
-    if state not in ["on", "off"]:
-        await interaction.response.send_message("請輸入 on 或 off", ephemeral=True)
-        return
+@bot.tree.command(name="防新增頻道開關", description="防新增頻道的開關")
+@app_commands.choices(state=[
+    app_commands.Choice(name="開啟", value="on"),
+    app_commands.Choice(name="關閉", value="off")
+])
+async def toggle_channel_create(interaction: discord.Interaction, state: str):
+    ensure_guild_settings(interaction.guild.id)
 
-    anti_settings["anti_channel_create"] = state == "on"
+    value = 1 if state.lower() == "on" else 0
+
+    cursor.execute(
+        "UPDATE settings SET anti_channel_create=? WHERE guild_id=?",
+        (value, interaction.guild.id)
+    )
+    db.commit()
 
     embed = discord.Embed(
-        title="🛡 防新增頻道",
-        description=f"狀態已設為 **{state.upper()}**",
-        color=0x00ffcc if state == "on" else 0xff4444
+        title="🔒 防新增頻道",
+        description=f"狀態：{'🟢 開啟' if value else '🔴 關閉'}",
+        color=discord.Color.green() if value else discord.Color.red()
     )
 
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="防刪頻道開關", description="防刪除頻道的開關")
+@app_commands.choices(state=[
+    app_commands.Choice(name="開啟", value="on"),
+    app_commands.Choice(name="關閉", value="off")
+])
+async def toggle_channel_delete(interaction: discord.Interaction, state: str):
+    ensure_guild_settings(interaction.guild.id)
 
-@bot.tree.command(name="防刪頻道開關", description="防刪頻道 開 or 關")
-@app_commands.check(check_admin)
-async def anti_channel_delete(interaction: discord.Interaction, state: str):
-    state = state.lower()
-    if state not in ["on", "off"]:
-        await interaction.response.send_message("請輸入 on 或 off", ephemeral=True)
-        return
+    value = 1 if state.lower() == "on" else 0
 
-    anti_settings["anti_channel_delete"] = state == "on"
+    cursor.execute(
+        "UPDATE settings SET anti_channel_delete=? WHERE guild_id=?",
+        (value, interaction.guild.id)
+    )
+    db.commit()
 
     embed = discord.Embed(
         title="🛡 防刪頻道",
-        description=f"狀態已設為 **{state.upper()}**",
-        color=0x00ffcc if state == "on" else 0xff4444
+        description=f"狀態：{'🟢 開啟' if value else '🔴 關閉'}",
+        color=discord.Color.green() if value else discord.Color.red()
     )
 
     await interaction.response.send_message(embed=embed)
 
 
-@bot.tree.command(name="防刪角色開關", description="防刪角色 開 or 關")
-@app_commands.check(check_admin)
-async def anti_role_delete(interaction: discord.Interaction, state: str):
-    state = state.lower()
-    if state not in ["on", "off"]:
-        await interaction.response.send_message("請輸入 on 或 off", ephemeral=True)
-        return
+@bot.tree.command(name="防刪角色開關", description="防防刪除角色的開關")
+@app_commands.choices(state=[
+    app_commands.Choice(name="開啟", value="on"),
+    app_commands.Choice(name="關閉", value="off")
+])
+async def toggle_role_delete(interaction: discord.Interaction, state: str):
+    ensure_guild_settings(interaction.guild.id)
 
-    anti_settings["anti_role_delete"] = state == "on"
+    value = 1 if state.lower() == "on" else 0
+
+    cursor.execute(
+        "UPDATE settings SET anti_role_delete=? WHERE guild_id=?",
+        (value, interaction.guild.id)
+    )
+    db.commit()
 
     embed = discord.Embed(
-        title="🛡 防刪角色",
-        description=f"狀態已設為 **{state.upper()}**",
-        color=0x00ffcc if state == "on" else 0xff4444
+        title="🧱 防刪角色",
+        description=f"狀態：{'🟢 開啟' if value else '🔴 關閉'}",
+        color=discord.Color.green() if value else discord.Color.red()
     )
 
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="防改伺服器名稱開關", description="防改伺服器名稱的開關")
+@app_commands.choices(state=[
+    app_commands.Choice(name="開啟", value="on"),
+    app_commands.Choice(name="關閉", value="off")
+])
+async def toggle_guild_rename(interaction: discord.Interaction, state: str):
+    ensure_guild_settings(interaction.guild.id)
 
-@bot.tree.command(name="防改伺服器名稱開關", description="防改伺服器名稱 開 or 關")
-@app_commands.check(check_admin)
-async def anti_guild_update(interaction: discord.Interaction, state: str):
-    state = state.lower()
-    if state not in ["on", "off"]:
-        await interaction.response.send_message("請輸入 on 或 off", ephemeral=True)
-        return
+    value = 1 if state.lower() == "on" else 0
 
-    anti_settings["anti_guild_update"] = state == "on"
+    cursor.execute(
+        "UPDATE settings SET anti_guild_rename=? WHERE guild_id=?",
+        (value, interaction.guild.id)
+    )
+    db.commit()
 
     embed = discord.Embed(
-        title="🛡 防改伺服器名稱",
-        description=f"狀態已設為 **{state.upper()}**",
-        color=0x00ffcc if state == "on" else 0xff4444
+        title="🏷 防改伺服器名稱",
+        description=f"狀態：{'🟢 開啟' if value else '🔴 關閉'}",
+        color=discord.Color.green() if value else discord.Color.red()
     )
 
     await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="防炸總開關", description="所有防炸功能的一次全部開 or 關")
+async def toggle_all_protection(interaction: discord.Interaction, state: str):
+    ensure_guild_settings(interaction.guild.id)
+
+    value = 1 if state.lower() == "on" else 0
+
+    cursor.execute("""
+        UPDATE settings
+        SET anti_channel_create=?,
+            anti_channel_delete=?,
+            anti_role_delete=?,
+            anti_guild_rename=?
+        WHERE guild_id=?
+    """, (value, value, value, value, interaction.guild.id))
+
+    db.commit()
+
+    embed = discord.Embed(
+        title="🛡 防炸系統總開關",
+        description=f"目前狀態：{'🟢 全部開啟' if value else '🔴 全部關閉'}",
+        color=discord.Color.green() if value else discord.Color.red()
+    )
+
+    embed.add_field(name="防新增頻道", value="同步變更", inline=True)
+    embed.add_field(name="防刪頻道", value="同步變更", inline=True)
+    embed.add_field(name="防刪角色", value="同步變更", inline=True)
+    embed.add_field(name="防改伺服器名稱", value="同步變更", inline=True)
+
+    await interaction.response.send_message(embed=embed)
+
 
 @bot.tree.command(name="查看防炸系統", description="查看防炸系統狀態")
 async def anti_status(interaction: discord.Interaction):
@@ -472,6 +548,7 @@ async def anti_status(interaction: discord.Interaction):
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
