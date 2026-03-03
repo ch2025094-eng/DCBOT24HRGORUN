@@ -2,6 +2,19 @@ from flask import Flask, render_template_string
 import sqlite3
 import os
 import time
+import sqlite3
+
+conn = sqlite3.connect("database.db")
+cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS blacklist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL
+)
+""")
+
+conn.commit()
 
 app = Flask(__name__)
 
