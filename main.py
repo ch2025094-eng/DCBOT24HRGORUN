@@ -191,7 +191,8 @@ async def on_message(message):
 # 事件防護
 # =========================
 @bot.event
-async def on_guild_channel_create(channel):
+if not anti_settings["anti_channel_create"]:
+    return
     ensure_guild_settings(channel.guild.id)
     cursor.execute("SELECT anti_channel_create FROM settings WHERE guild_id=?", (channel.guild.id,))
     if cursor.fetchone()[0] == 0:
@@ -449,6 +450,7 @@ async def anti_guild_update(interaction: discord.Interaction, state: str):
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
