@@ -377,7 +377,7 @@ def check_admin(interaction: discord.Interaction):
     return interaction.user.guild_permissions.administrator
 
 
-@tree.command(name="anti_channel_create", description="防新增頻道 開關")
+@bot.tree.command(name="anti_channel_create", description="防新增頻道 開關")
 @app_commands.check(check_admin)
 async def anti_channel_create(interaction: discord.Interaction, state: str):
     state = state.lower()
@@ -396,7 +396,7 @@ async def anti_channel_create(interaction: discord.Interaction, state: str):
     await interaction.response.send_message(embed=embed)
 
 
-@tree.command(name="anti_channel_delete", description="防刪頻道 開關")
+@bot.tree.command(name="anti_channel_delete", description="防刪頻道 開關")
 @app_commands.check(check_admin)
 async def anti_channel_delete(interaction: discord.Interaction, state: str):
     state = state.lower()
@@ -415,7 +415,7 @@ async def anti_channel_delete(interaction: discord.Interaction, state: str):
     await interaction.response.send_message(embed=embed)
 
 
-@tree.command(name="anti_role_delete", description="防刪角色 開關")
+@bot.tree.command(name="anti_role_delete", description="防刪角色 開關")
 @app_commands.check(check_admin)
 async def anti_role_delete(interaction: discord.Interaction, state: str):
     state = state.lower()
@@ -434,7 +434,7 @@ async def anti_role_delete(interaction: discord.Interaction, state: str):
     await interaction.response.send_message(embed=embed)
 
 
-@tree.command(name="anti_guild_update", description="防改伺服器名稱 開關")
+@bot.tree.command(name="anti_guild_update", description="防改伺服器名稱 開關")
 @app_commands.check(check_admin)
 async def anti_guild_update(interaction: discord.Interaction, state: str):
     state = state.lower()
@@ -456,6 +456,7 @@ async def anti_guild_update(interaction: discord.Interaction, state: str):
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
