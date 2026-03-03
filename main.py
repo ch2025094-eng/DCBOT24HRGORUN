@@ -377,7 +377,7 @@ def check_admin(interaction: discord.Interaction):
     return interaction.user.guild_permissions.administrator
 
 
-@bot.tree.command(name="anti_channel_create", description="防新增頻道 開關")
+@bot.tree.command(name="防新增頻道開關", description="防新增頻道 開 or 關")
 @app_commands.check(check_admin)
 async def anti_channel_create(interaction: discord.Interaction, state: str):
     state = state.lower()
@@ -396,7 +396,7 @@ async def anti_channel_create(interaction: discord.Interaction, state: str):
     await interaction.response.send_message(embed=embed)
 
 
-@bot.tree.command(name="anti_channel_delete", description="防刪頻道 開關")
+@bot.tree.command(name="防刪頻道開關", description="防刪頻道 開 or 關")
 @app_commands.check(check_admin)
 async def anti_channel_delete(interaction: discord.Interaction, state: str):
     state = state.lower()
@@ -415,7 +415,7 @@ async def anti_channel_delete(interaction: discord.Interaction, state: str):
     await interaction.response.send_message(embed=embed)
 
 
-@bot.tree.command(name="anti_role_delete", description="防刪角色 開關")
+@bot.tree.command(name="防刪角色開關", description="防刪角色 開 or 關")
 @app_commands.check(check_admin)
 async def anti_role_delete(interaction: discord.Interaction, state: str):
     state = state.lower()
@@ -434,7 +434,7 @@ async def anti_role_delete(interaction: discord.Interaction, state: str):
     await interaction.response.send_message(embed=embed)
 
 
-@bot.tree.command(name="anti_guild_update", description="防改伺服器名稱 開關")
+@bot.tree.command(name="防改伺服器名稱開關", description="防改伺服器名稱 開 or 關")
 @app_commands.check(check_admin)
 async def anti_guild_update(interaction: discord.Interaction, state: str):
     state = state.lower()
@@ -452,10 +452,27 @@ async def anti_guild_update(interaction: discord.Interaction, state: str):
 
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="查看防炸系統", description="查看防炸系統狀態")
+async def anti_status(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="🛡 喵總管 防炸系統狀態",
+        color=0x3498db
+    )
+
+    for key, value in anti_settings.items():
+        embed.add_field(
+            name=key,
+            value="🟢 ON" if value else "🔴 OFF",
+            inline=False
+        )
+
+    await interaction.response.send_message(embed=embed)
+
 
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
