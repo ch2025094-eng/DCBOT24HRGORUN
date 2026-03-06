@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS blacklist (
     user_id TEXT NOT NULL
 )
 """)
+
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS settings (
     guild_id TEXT PRIMARY KEY,
@@ -27,10 +28,20 @@ CREATE TABLE IF NOT EXISTS settings (
     anti_guild_rename INTEGER DEFAULT 0
 )
 """)
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS welcome (
+guild_id TEXT PRIMARY KEY,
+enabled INTEGER,
+channel_id TEXT,
+message TEXT
+)
+""")
 conn.commit()
 conn.close()
 
 START_TIME = time.time()
+
 
 @app.route("/")
 def home():
@@ -84,8 +95,31 @@ def guilds():
 @app.route("/dashboard/<guild_id>")
 def dashboard(guild_id):
     page = request.args.get("page", "overview")
+
+    # 先抓伺服器名稱和 icon
+    token = session.get("token")
+    headers = {"Authorization": f"Bearer {token}"}
+    r = requests.get(f"{DISCORD_API}/users/@me/guilds", headers=headers)
+
+    guild_name = "Unknown"
+    guild_icon = None
+    for g in r.json():
+        if g["id"] == guild_id:
+            guild_name = g["name"]
+            guild_icon = g["icon"]
+
+    # 再連資料庫抓設定
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
+
+    # 歡迎訊息
+    cursor.execute("SELECT enabled, channel_id, message FROM welcome WHERE guild_id=? LIMIT 1", (guild_id,))
+    w = cursor.fetchone()
+    if w:
+        welcome = {"enabled": w[0], "channel_id": w[1], "message": w[2]}
+    else:
+        # 即使資料庫沒紀錄，也給一個預設 dict
+        welcome = {"enabled": 0, "channel_id": "", "message": ""}
 
     # 黑名單
     cursor.execute("SELECT user_id FROM blacklist")
@@ -115,8 +149,11 @@ def dashboard(guild_id):
     return render_template("dashboard.html",
                            page=page,
                            guild_id=guild_id,
+                           guild_name=guild_name,
+                           guild_icon=guild_icon,
                            protection=protection,
                            blacklist=blacklist,
+                           welcome=welcome,  # ← 確保這裡有
                            uptime=uptime,
                            title="控制台")
 
@@ -141,6 +178,7 @@ def update_protection(guild_id):
     conn.close()
     return redirect(f"/dashboard/{guild_id}?page=protection")
 
+
 @app.route("/update_blacklist/<guild_id>", methods=["POST"])
 def update_blacklist(guild_id):
     user_id = request.form.get("user_id")
@@ -151,6 +189,30 @@ def update_blacklist(guild_id):
         conn.commit()
         conn.close()
     return redirect(f"/dashboard/{guild_id}?page=blacklist")
+
+@app.route("/update_welcome/<guild_id>", methods=["POST"])
+def update_welcome(guild_id):
+
+    enabled = 1 if request.form.get("enabled") else 0
+    channel_id = request.form.get("channel_id")
+    message = request.form.get("message")
+
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    INSERT INTO welcome (guild_id, enabled, channel_id, message)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(guild_id) DO UPDATE SET
+        enabled=excluded.enabled,
+        channel_id=excluded.channel_id,
+        message=excluded.message
+    """,(guild_id, enabled, channel_id, message))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(f"/dashboard/{guild_id}?page=welcome")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
