@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white">
+
+<div class="flex h-screen">
+
+    <!-- 左側側邊欄 -->
+    <div class="w-64 bg-slate-800 p-5">
+        <h2 class="text-xl mb-6">控制台</h2>
+        <a href="?page=overview" class="block mb-3">概覽</a>
+        <a href="?page=protection" class="block mb-3">防炸系統</a>
+        <a href="?page=blacklist" class="block mb-3">黑名單</a>
+        <a href="?page=roles" class="block mb-3">角色管理</a>
+        <a href="?page=welcome" class="block mb-3">歡迎訊息</a>
+        <a href="?page=settings" class="block mb-3">機器人設定</a>
+        <a href="/logout" class="block mt-10 text-red-500">登出</a>
+    </div>
+
+    <!-- 右側內容 -->
+    <div class="flex-1 p-10 overflow-auto">
+        {% block content %}{% endblock %}
+    </div>
+
+</div>
+
+</body>
+</html>

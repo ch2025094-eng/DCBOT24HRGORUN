@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>{{title}}</title>
+
+<style>
+
+body{
+margin:0;
+font-family:Arial;
+background:#0f172a;
+color:white;
+display:flex;
+}
+
+.sidebar{
+width:230px;
+background:#020617;
+height:100vh;
+padding:20px;
+}
+
+.sidebar h2{
+color:#38bdf8;
+}
+
+.sidebar a{
+display:block;
+padding:10px;
+color:white;
+text-decoration:none;
+border-radius:6px;
+margin-bottom:6px;
+}
+
+.sidebar a:hover{
+background:#1e293b;
+}
+
+.main{
+flex:1;
+padding:40px;
+}
+
+.card{
+background:#1e293b;
+padding:20px;
+border-radius:10px;
+margin-bottom:20px;
+}
+
+input,textarea{
+width:100%;
+padding:10px;
+margin-top:5px;
+margin-bottom:10px;
+background:#020617;
+color:white;
+border:1px solid #334155;
+border-radius:5px;
+}
+
+button{
+padding:10px 20px;
+background:#38bdf8;
+border:none;
+border-radius:6px;
+cursor:pointer;
+}
+
+.toggle{
+transform:scale(1.4);
+margin-right:10px;
+}
+
+.guild-header{
+display:flex;
+align-items:center;
+margin-bottom:20px;
+}
+
+.guild-header img{
+width:50px;
+border-radius:50%;
+margin-right:10px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="sidebar">
+
+<h2>🐾 喵總管</h2>
+
+<a href="/dashboard/{{guild_id}}?page=overview">總覽</a>
+<a href="/dashboard/{{guild_id}}?page=protection">防炸系統</a>
+<a href="/dashboard/{{guild_id}}?page=welcome">歡迎訊息</a>
+<a href="/dashboard/{{guild_id}}?page=blacklist">黑名單</a>
+
+</div>
+
+<div class="main">
+
+<div class="guild-header">
+
+{% if guild_icon %}
+<img src="https://cdn.discordapp.com/icons/{{guild_id}}/{{guild_icon}}.png">
+{% endif %}
+
+<h2>{{guild_name}}</h2>
+
+</div>
+
+{% if page == "overview" %}
+
+<div class="card">
+<h3>機器人狀態</h3>
+<p>🟢 運行中</p>
+<p>運行時間 {{uptime}} 秒</p>
+</div>
+
+{% endif %}
+
+
+{% if page == "protection" %}
+
+<div class="card">
+<h3>防炸系統</h3>
+
+<form action="/update_protection/{{guild_id}}" method="POST">
+
+<label>
+<input type="checkbox" class="toggle" name="anti_channel_create"
+{% if protection.anti_channel_create %}checked{% endif %}>
+防止頻道創建
+</label><br><br>
+
+<label>
+<input type="checkbox" class="toggle" name="anti_channel_delete"
+{% if protection.anti_channel_delete %}checked{% endif %}>
+防止頻道刪除
+</label><br><br>
+
+<label>
+<input type="checkbox" class="toggle" name="anti_role_delete"
+{% if protection.anti_role_delete %}checked{% endif %}>
+防止刪除身分組
+</label><br><br>
+
+<label>
+<input type="checkbox" class="toggle" name="anti_guild_rename"
+{% if protection.anti_guild_rename %}checked{% endif %}>
+防止伺服器改名
+</label><br><br>
+
+<button>儲存設定</button>
+
+</form>
+
+</div>
+
+{% endif %}
+
+
+
+{% if page == "welcome" %}
+
+<div class="card">
+
+<h3>歡迎訊息</h3>
+
+<form action="/update_welcome/{{guild_id}}" method="POST">
+
+<label>
+<input type="checkbox" name="enabled"
+{% if welcome.enabled %}checked{% endif %}>
+啟用歡迎訊息
+</label>
+
+<br><br>
+
+頻道ID
+<input name="channel_id" value="{{welcome.channel_id}}">
+
+訊息內容
+<textarea name="message">{{welcome.message}}</textarea>
+
+<button>儲存</button>
+
+</form>
+
+</div>
+
+{% endif %}
+
+
+
+{% if page == "blacklist" %}
+
+<div class="card">
+
+<h3>黑名單</h3>
+
+<form action="/update_blacklist/{{guild_id}}" method="POST">
+
+輸入使用者ID
+<input name="user_id">
+
+<button>加入</button>
+
+</form>
+
+<hr>
+
+{% for u in blacklist %}
+
+<p>{{u.user_id}}</p>
+
+{% endfor %}
+
+</div>
+
+{% endif %}
+
+
+</div>
+
+</body>
+</html>

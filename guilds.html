@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>選擇伺服器</title>
+
+<style>
+
+body{
+background:#2c2f33;
+color:white;
+font-family:Arial;
+}
+
+.guild{
+background:#23272a;
+padding:15px;
+margin:10px;
+border-radius:8px;
+}
+
+a{
+color:#57F287;
+text-decoration:none;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>選擇要管理的伺服器</h1>
+
+{% for g in guilds %}
+
+<div class="guild">
+
+<b>{{ g.name }}</b>
+
+<br>
+
+<a href="/dashboard/{{ g.id }}">
+進入控制台
+</a>
+
+</div>
+
+{% endfor %}
+
+</body>
+</html>
