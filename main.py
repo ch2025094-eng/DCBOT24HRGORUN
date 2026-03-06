@@ -142,6 +142,38 @@ async def on_ready():
     await bot.tree.sync()
     print(f"🤖 已登入 {bot.user}")
 
+@bot.event
+async def on_member_join(member):
+
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT enabled, channel_id, message FROM welcome WHERE guild_id=?",
+        (str(member.guild.id),)
+    )
+
+    data = cursor.fetchone()
+    conn.close()
+
+    if not data:
+        return
+
+    enabled, channel_id, message = data
+
+    if not enabled:
+        return
+
+    channel = member.guild.get_channel(int(channel_id))
+
+    if not channel:
+        return
+
+    message = message.replace("{user}", member.mention)
+    message = message.replace("{server}", member.guild.name)
+
+    await channel.send(message)
+
 # =========================
 # 事件防護
 # =========================
@@ -548,6 +580,7 @@ async def anti_status(interaction: discord.Interaction):
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
