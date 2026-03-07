@@ -41,7 +41,6 @@ CREATE TABLE IF NOT EXISTS settings (
 )
 """)
 
-
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS stats (
     guild_id INTEGER PRIMARY KEY,
@@ -50,8 +49,15 @@ CREATE TABLE IF NOT EXISTS stats (
 )
 """)
 
-
-
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS welcome (
+    guild_id TEXT PRIMARY KEY,
+    enabled INTEGER,
+    channel_id TEXT,
+    message TEXT
+)
+""")
+conn.commit()
 db.commit()
 
 # =========================
@@ -615,6 +621,7 @@ async def anti_status(interaction: discord.Interaction):
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
