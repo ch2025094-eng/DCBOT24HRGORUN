@@ -513,47 +513,34 @@ async def toggle_all_protection(interaction: discord.Interaction, state: str):
 
     await interaction.response.send_message(embed=embed)
 
-# =========================
-    # 設置違規懲罰訊息頻道
-    # =========================
-    @app_commands.command(
-        name="set_punish_channel",
-        description="設置違規懲罰訊息頻道，違規或踢出/禁言訊息將發送到此頻道"
-    )
-    @app_commands.checks.has_permissions(administrator=True)
-    async def set_punish_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        guild_id = interaction.guild.id
-        cursor.execute("""
-            INSERT INTO settings (guild_id, punish_channel_id)
-            VALUES (?, ?)
-            ON CONFLICT(guild_id) DO UPDATE SET punish_channel_id=excluded.punish_channel_id
-        """, (guild_id, channel.id))
-        db.commit()
-        await interaction.response.send_message(f"✅ 已將違規懲罰訊息頻道設置為 {channel.mention}", ephemeral=True)
+# 設置違規懲罰訊息頻道
+@bot.tree.command(
+    name="違規懲罰訊息設置",
+    description="設置違規懲罰訊息頻道"
+)
+@app_commands.checks.has_permissions(administrator=True)
+async def set_punish_channel(interaction: discord.Interaction, channel: discord.TextChannel):
+    # 將頻道存入資料庫
+    cursor.execute("INSERT OR REPLACE INTO settings (guild_id, punish_channel_id) VALUES (?, ?)",
+                   (interaction.guild.id, channel.id))
+    db.commit()
+    await interaction.response.send_message(f"✅ 已設置 {channel.mention} 為違規懲罰訊息頻道")
 
-    # =========================
-    # 設置日誌頻道
-    # =========================
-    @app_commands.command(
-        name="set_log_channel",
-        description="設置日誌頻道，成員在伺服器的各種操作將被紀錄"
-    )
-    @app_commands.checks.has_permissions(administrator=True)
-    async def set_log_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        guild_id = interaction.guild.id
-        cursor.execute("""
-            INSERT INTO settings (guild_id, log_channel_id)
-            VALUES (?, ?)
-            ON CONFLICT(guild_id) DO UPDATE SET log_channel_id=excluded.log_channel_id
-        """, (guild_id, channel.id))
-        db.commit()
-        await interaction.response.send_message(f"✅ 已將日誌頻道設置為 {channel.mention}", ephemeral=True)
-
-async def setup(bot: commands.Bot):
-    await bot.add_cog(AdminCommands(bot))
+# 設置日誌頻道
+@bot.tree.command(
+    name="設置日誌頻道",
+    description="設置日誌頻道，紀錄所有成員動作"
+)
+@app_commands.checks.has_permissions(administrator=True)
+async def set_log_channel(interaction: discord.Interaction, channel: discord.TextChannel):
+    cursor.execute("INSERT OR REPLACE INTO settings (guild_id, log_channel_id) VALUES (?, ?)",
+                   (interaction.guild.id, channel.id))
+    db.commit()
+    await interaction.response.send_message(f"✅ 已設置 {channel.mention} 為日誌頻道")
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
