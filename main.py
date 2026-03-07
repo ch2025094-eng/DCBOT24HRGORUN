@@ -157,19 +157,31 @@ async def punish_user(member: discord.Member, reason: str):
 # =========================
 # 事件檢測
 # =========================
-@bot.event
-async def handle_guild_event(member: discord.Member, event_type: str):
+# =========================
+# 防炸事件處理（新增/刪頻道、刪角色、改伺服器名稱）
+# =========================
+async def handle_guild_event(channel_or_role_or_guild, event_type: str):
     """
     event_type: "新增頻道" / "刪除頻道" / "刪除角色" / "修改伺服器名稱"
+    channel_or_role_or_guild: 對應的 discord 對象
     """
-    if is_whitelisted(member.id):
+    # 取得 guild
+    if isinstance(channel_or_role_or_guild, (discord.TextChannel, discord.VoiceChannel, discord.CategoryChannel)):
+        guild = channel_or_role_or_guild.guild
+    elif isinstance(channel_or_role_or_guild, discord.Role):
+        guild = channel_or_role_or_guild.guild
+    elif isinstance(channel_or_role_or_guild, discord.Guild):
+        guild = channel_or_role_or_guild
+    else:
         return
+
+    # 確認 guild 設定
+    ensure_guild_settings(guild.id)
 
     cursor.execute("""
         SELECT anti_channel_create, anti_channel_delete, anti_role_delete, anti_guild_rename
-        FROM settings
-        WHERE guild_id=?
-    """, (member.guild.id,))
+        FROM settings WHERE guild_id=?
+    """, (guild.id,))
     settings = cursor.fetchone() or (0, 0, 0, 0)
 
     trigger = False
@@ -182,9 +194,33 @@ async def handle_guild_event(member: discord.Member, event_type: str):
     elif event_type == "修改伺服器名稱" and settings[3]:
         trigger = True
 
-    if trigger:
-        await punish_user(member, f"管理事件違規: {event_type}")
+    if not trigger:
+        return
 
+    # 取得最後一筆 audit log 的操作者
+    async for entry in guild.audit_logs(limit=1,
+                                        action={
+                                            "新增頻道": discord.AuditLogAction.channel_create,
+                                            "刪除頻道": discord.AuditLogAction.channel_delete,
+                                            "刪除角色": discord.AuditLogAction.role_delete,
+                                            "修改伺服器名稱": discord.AuditLogAction.guild_update
+                                        }[event_type]):
+        actor = entry.user
+        break
+    else:
+        return  # 沒找到操作者
+
+    # 白名單不受限制
+    if is_whitelisted(actor.id):
+        return
+
+    # 進行懲罰
+    await punish_user(actor, f"管理事件違規: {event_type}")
+
+    # 記錄到日誌頻道
+    await send_guild_log(guild,
+                         f"管理事件觸發: {event_type}",
+                         f"{actor.mention} ({actor.id}) 觸發事件: {event_type}")
 # =========================
 # 事件日誌範例（所有行為都記錄）
 # =========================
@@ -570,6 +606,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
