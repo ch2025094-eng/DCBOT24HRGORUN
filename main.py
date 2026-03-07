@@ -15,6 +15,8 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # =========================
 # 資料庫
 # =========================
+conn = sqlite3.connect("bot.db")
+cursor = conn.cursor()
 db = sqlite3.connect("data.db")
 cursor = db.cursor()
 
@@ -621,6 +623,7 @@ async def anti_status(interaction: discord.Interaction):
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
