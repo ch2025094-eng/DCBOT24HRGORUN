@@ -1,6 +1,10 @@
 import discord
 from discord.ext import commands
 from discord import app_commandsimport sqlite3
+import matplotlib.pyplot as plt
+import os
+from datetime import datetime, timezone, timedelta
+from collections import defaultdict
 import sqlite3
 conn = sqlite3.connect("bot.db", check_same_thread=False)
 cursor = conn.cursor()
@@ -15,10 +19,6 @@ CREATE TABLE IF NOT EXISTS welcome (
 """)
 
 conn.commit()
-import matplotlib.pyplot as plt
-import os
-from datetime import datetime, timezone, timedelta
-from collections import defaultdict
 
 TOKEN = os.getenv("TOKEN")
 
@@ -636,6 +636,7 @@ async def anti_status(interaction: discord.Interaction):
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
