@@ -236,17 +236,20 @@ async def on_guild_update(before, after):
 # Slash 指令（全部有介紹）
 # =========================
 @bot.tree.command(name="加入黑名單", description="將指定使用者加入黑名單")
+@app_commands.checks.has_permissions(administrator=True)
 async def add_black(interaction: discord.Interaction, member: discord.Member):
     add_blacklist(member.id)
     await interaction.response.send_message(f"🚫 {member.mention} 已加入黑名單")
 
 @bot.tree.command(name="移除黑名單", description="將指定使用者移出黑名單")
+@app_commands.checks.has_permissions(administrator=True)
 async def remove_black(interaction: discord.Interaction, member: discord.Member):
     cursor.execute("DELETE FROM blacklist WHERE user_id=?", (member.id,))
     db.commit()
     await interaction.response.send_message(f"✅ {member.mention} 已移出黑名單")
 
 @bot.tree.command(name="查看黑名單", description="查看全伺服器黑名單成員")
+@app_commands.checks.has_permissions(administrator=True)
 async def view_black(interaction: discord.Interaction):
     cursor.execute("SELECT user_id FROM blacklist")
     data = cursor.fetchall()
@@ -257,18 +260,21 @@ async def view_black(interaction: discord.Interaction):
     await interaction.response.send_message(msg)
 
 @bot.tree.command(name="加入白名單", description="將指定使用者加入白名單（不受防護影響）")
+@app_commands.checks.has_permissions(administrator=True)
 async def add_white(interaction: discord.Interaction, member: discord.Member):
     cursor.execute("INSERT OR IGNORE INTO whitelist (user_id) VALUES (?)", (member.id,))
     db.commit()
     await interaction.response.send_message(f"✅ {member.mention} 已加入白名單")
 
 @bot.tree.command(name="移除白名單", description="將指定使用者移出白名單")
+@app_commands.checks.has_permissions(administrator=True)
 async def remove_white(interaction: discord.Interaction, member: discord.Member):
     cursor.execute("DELETE FROM whitelist WHERE user_id=?", (member.id,))
     db.commit()
     await interaction.response.send_message(f"🚫 {member.mention} 已移出白名單")
 
 @bot.tree.command(name="查看白名單", description="查看全伺服器白名單成員")
+@app_commands.checks.has_permissions(administrator=True)
 async def view_white(interaction: discord.Interaction):
     cursor.execute("SELECT user_id FROM whitelist")
     data = cursor.fetchall()
@@ -279,6 +285,7 @@ async def view_white(interaction: discord.Interaction):
     await interaction.response.send_message(msg)
 
 @bot.tree.command(name="後台統計", description="查看機器人封鎖與處罰統計")
+@app_commands.checks.has_permissions(administrator=True)
 async def backend_stats(interaction: discord.Interaction):
     ensure_guild_settings(interaction.guild.id)
 
@@ -304,6 +311,7 @@ async def backend_stats(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="統計圖表", description="生成封鎖與禁言統計圖表")
+@app_commands.checks.has_permissions(administrator=True)
 async def stats_chart(interaction: discord.Interaction):
     ensure_guild_settings(interaction.guild.id)
 
@@ -330,6 +338,7 @@ async def stats_chart(interaction: discord.Interaction):
     await interaction.response.send_message(file=discord.File(file_path))
 
 @bot.tree.command(name="防護狀態", description="查看目前防炸系統開關狀態")
+@app_commands.checks.has_permissions(administrator=True)
 async def protection_status(interaction: discord.Interaction):
     ensure_guild_settings(interaction.guild.id)
 
@@ -356,6 +365,7 @@ async def protection_status(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="機器人狀態", description="查看機器人上線狀態與延遲")
+@app_commands.checks.has_permissions(administrator=True)
 async def bot_status(interaction: discord.Interaction):
     latency = round(bot.latency * 1000)
 
@@ -387,6 +397,7 @@ def check_admin(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="防新增頻道開關", description="防新增頻道的開關")
+@app_commands.checks.has_permissions(administrator=True)
 @app_commands.choices(state=[
     app_commands.Choice(name="開啟", value="on"),
     app_commands.Choice(name="關閉", value="off")
@@ -411,6 +422,7 @@ async def toggle_channel_create(interaction: discord.Interaction, state: str):
     await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="防刪頻道開關", description="防刪除頻道的開關")
+@app_commands.checks.has_permissions(administrator=True)
 @app_commands.choices(state=[
     app_commands.Choice(name="開啟", value="on"),
     app_commands.Choice(name="關閉", value="off")
@@ -436,6 +448,7 @@ async def toggle_channel_delete(interaction: discord.Interaction, state: str):
 
 
 @bot.tree.command(name="防刪角色開關", description="防防刪除角色的開關")
+@app_commands.checks.has_permissions(administrator=True)
 @app_commands.choices(state=[
     app_commands.Choice(name="開啟", value="on"),
     app_commands.Choice(name="關閉", value="off")
@@ -460,6 +473,7 @@ async def toggle_role_delete(interaction: discord.Interaction, state: str):
     await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="防改伺服器名稱開關", description="防改伺服器名稱的開關")
+@app_commands.checks.has_permissions(administrator=True)
 @app_commands.choices(state=[
     app_commands.Choice(name="開啟", value="on"),
     app_commands.Choice(name="關閉", value="off")
@@ -484,6 +498,7 @@ async def toggle_guild_rename(interaction: discord.Interaction, state: str):
     await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="防炸總開關", description="所有防炸功能的一次全部開 or 關")
+@app_commands.checks.has_permissions(administrator=True)
 async def toggle_all_protection(interaction: discord.Interaction, state: str):
     ensure_guild_settings(interaction.guild.id)
 
@@ -540,6 +555,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
