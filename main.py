@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from discord import app_commandsimport sqlite3
+from discord import app_commandsimport
 import matplotlib.pyplot as plt
 import os
 from datetime import datetime, timezone, timedelta
@@ -549,6 +549,7 @@ async def anti_status(interaction: discord.Interaction):
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
