@@ -102,66 +102,100 @@ def add_blacklist(user_id):
     db.commit()
 
 # =========================
-# 懲罰用戶
+# 黑名單工具函數
 # =========================
-async def punish_user(member, reason, force_blacklist=False):
-    """
-    force_blacklist: 如果為 True，不管違規次數，直接列入黑名單
-    """
-    if is_whitelisted(member.id):
-        # 白名單成員不受限制
-        return
+import discord
+from datetime import datetime, timezone
 
-    ensure_guild_settings(member.guild.id)
+# 假設 db 是 sqlite3 連線物件，cursor 是它的 cursor
+# guild 是 discord.Guild 物件
 
-    if is_blacklisted(member.id):
-        # 已在黑名單 -> 永久封鎖
-        await member.ban(reason=f"黑名單再次違規: {reason}")
-        cursor.execute("""
-            UPDATE stats
-            SET total_bans = total_bans + 1
-            WHERE guild_id=?
-        """, (member.guild.id,))
-        db.commit()
-        await send_log(
-            member.guild,
-            "🚫 黑名單再次違規",
-            f"使用者: {member.mention}\n原因: {reason}\n處罰: 永久封鎖"
-        )
-        return
+def is_whitelisted(user_id):
+    cursor.execute("SELECT 1 FROM whitelist WHERE user_id=?", (user_id,))
+    return cursor.fetchone() is not None
 
-    # 強制黑名單或違規達 3 次直接列入
-    if force_blacklist:
-        add_blacklist(member.id)
-        await member.kick(reason=reason)
-        await send_log(
-            member.guild,
-            "🛑 強制列入黑名單",
-            f"使用者: {member.mention}\n原因: {reason}\n處罰: 被踢出並列入黑名單"
-        )
-        return
+def is_blacklisted(user_id):
+    cursor.execute("SELECT 1 FROM blacklist WHERE user_id=?", (user_id,))
+    return cursor.fetchone() is not None
 
-    if is_blacklisted(member.id):
-    if not member.bot:
-        await member.kick(reason="黑名單成員")
-    else:
-        print(f"黑名單包含機器人 {member}，無法踢出")
-
-    # 否則，第一次違規 Timeout 60 秒 + 加入黑名單
-    until = datetime.now(timezone.utc) + timedelta(seconds=60)
-    await member.timeout(until, reason=reason)
-    add_blacklist(member.id)
-    cursor.execute("""
-        UPDATE stats
-        SET total_timeouts = total_timeouts + 1
-        WHERE guild_id=?
-    """, (member.guild.id,))
+def add_blacklist(user_id):
+    cursor.execute("INSERT OR IGNORE INTO blacklist (user_id) VALUES (?)", (user_id,))
     db.commit()
-    await send_log(
-        member.guild,
-        "⚠ 使用者違規",
-        f"使用者: {member.mention}\n原因: {reason}\n處罰: Timeout 60秒 + 加入黑名單"
-    )
+
+def get_log_channel(guild):
+    cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id=?", (guild.id,))
+    result = cursor.fetchone()
+    if result and result[0]:
+        return guild.get_channel(result[0])
+    return None
+
+async def send_log(guild, title, description, color=discord.Color.red()):
+    channel = get_log_channel(guild)
+    if channel:
+        embed = discord.Embed(
+            title=title,
+            description=description,
+            color=color,
+            timestamp=datetime.now(timezone.utc)
+        )
+        await channel.send(embed=embed)
+
+# =========================
+# 處理黑名單 & 違規懲罰
+# =========================
+async def handle_violation(member, reason, guild):
+    """
+    member: discord.Member 物件
+    reason: 字串，例如 "刷頻" / "洗版" / "刪頻道" 等
+    guild: discord.Guild 物件
+    """
+    # 白名單不受限制
+    if is_whitelisted(member.id):
+        return
+
+    # 已經在黑名單，直接踢出
+    if is_blacklisted(member.id):
+        try:
+            await member.kick(reason=f"黑名單成員違規: {reason}")
+        except discord.Forbidden:
+            await send_log(guild, "⚠ 無法踢出黑名單成員", f"{member.mention} ({member.id})")
+        else:
+            await send_log(guild, "🚫 黑名單成員已踢出", f"{member.mention} ({member.id}) 原因: {reason}")
+        return
+
+    # 不在黑名單 → 記錄為違規一次
+    # 這裡直接達到 3 次就加入黑名單
+    cursor.execute("""
+        INSERT INTO violation_counts (guild_id, user_id, count)
+        VALUES (?, ?, 1)
+        ON CONFLICT(guild_id, user_id) DO UPDATE SET count=count+1
+    """, (guild.id, member.id))
+    db.commit()
+
+    cursor.execute("SELECT count FROM violation_counts WHERE guild_id=? AND user_id=?", (guild.id, member.id))
+    count = cursor.fetchone()[0]
+
+    if count >= 3:
+        # 違規累積達 3 次 → 加入黑名單並踢出
+        add_blacklist(member.id)
+        try:
+            await member.kick(reason=f"累計違規 3 次，加入黑名單: {reason}")
+        except discord.Forbidden:
+            await send_log(guild, "⚠ 無法踢出累計違規成員", f"{member.mention} ({member.id})")
+        else:
+            await send_log(guild, "🚫 成員累計違規達 3 次已踢出並加入黑名單", f"{member.mention} ({member.id}) 原因: {reason}")
+        # 清除違規計數
+        cursor.execute("DELETE FROM violation_counts WHERE guild_id=? AND user_id=?", (guild.id, member.id))
+        db.commit()
+    else:
+        # 違規但未達 3 次 → 先處罰，例如禁言 60 秒
+        until = datetime.now(timezone.utc) + timedelta(seconds=60)
+        try:
+            await member.timeout(until, reason=reason)
+        except discord.Forbidden:
+            await send_log(guild, "⚠ 無法禁言成員", f"{member.mention} ({member.id}) 原因: {reason}")
+        else:
+            await send_log(guild, f"⚠ 使用者違規 ({count}/3)", f"{member.mention} 原因: {reason} → Timeout 60 秒")
 
 # =========================
 # 事件違規檢查
@@ -219,30 +253,22 @@ async def on_ready():
 # =========================
 # 事件防護區
 # =========================
-@bot.event
+@@bot.event
 async def on_guild_channel_create(channel):
-    for member in channel.guild.members:
-        if not member.bot:
-            await on_guild_event_violation(member, "新增頻道")
+    await handle_violation(channel.guild.me, "新增頻道", channel.guild)
 
 @bot.event
 async def on_guild_channel_delete(channel):
-    for member in channel.guild.members:
-        if not member.bot:
-            await on_guild_event_violation(member, "刪除頻道")
+    await handle_violation(channel.guild.me, "刪除頻道", channel.guild)
 
 @bot.event
 async def on_guild_role_delete(role):
-    for member in role.guild.members:
-        if not member.bot:
-            await on_guild_event_violation(member, "刪除角色")
+    await handle_violation(role.guild.me, "刪角色", role.guild)
 
 @bot.event
 async def on_guild_update(before, after):
     if before.name != after.name:
-        for member in after.members:
-            if not member.bot:
-                await on_guild_event_violation(member, "修改伺服器名稱")
+        await handle_violation(after.me, "改伺服器名稱", after)
     
 # =========================
 # Slash 指令（全部有介紹）
@@ -534,27 +560,10 @@ async def toggle_all_protection(interaction: discord.Interaction, state: str):
 
     await interaction.response.send_message(embed=embed)
 
-
-@bot.tree.command(name="查看防炸系統", description="查看防炸系統狀態")
-async def anti_status(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="🛡 喵總管 防炸系統狀態",
-        color=0x3498db
-    )
-
-    for key, value in anti_settings.items():
-        embed.add_field(
-            name=key,
-            value="🟢 ON" if value else "🔴 OFF",
-            inline=False
-        )
-
-    await interaction.response.send_message(embed=embed)
-
-
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
