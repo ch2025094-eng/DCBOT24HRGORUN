@@ -1,7 +1,20 @@
 import discord
 from discord.ext import commands
-from discord import app_commands
+from discord import app_commandsimport sqlite3
 import sqlite3
+conn = sqlite3.connect("bot.db", check_same_thread=False)
+cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS welcome (
+    guild_id TEXT PRIMARY KEY,
+    enabled INTEGER DEFAULT 0,
+    channel_id TEXT,
+    message TEXT
+)
+""")
+
+conn.commit()
 import matplotlib.pyplot as plt
 import os
 from datetime import datetime, timezone, timedelta
@@ -623,6 +636,7 @@ async def anti_status(interaction: discord.Interaction):
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
