@@ -253,7 +253,7 @@ async def on_ready():
 # =========================
 # 事件防護區
 # =========================
-@@bot.event
+@bot.event
 async def on_guild_channel_create(channel):
     await handle_violation(channel.guild.me, "新增頻道", channel.guild)
 
@@ -563,6 +563,7 @@ async def toggle_all_protection(interaction: discord.Interaction, state: str):
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
