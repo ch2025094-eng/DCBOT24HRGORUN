@@ -174,6 +174,41 @@ async def on_member_join(member):
 
     await channel.send(message)
 
+@bot.event
+async def on_member_join(member):
+
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT enabled, channel_id, message FROM welcome WHERE guild_id=?",
+        (str(member.guild.id),)
+    )
+
+    data = cursor.fetchone()
+    conn.close()
+
+    if not data:
+        return
+
+    enabled, channel_id, message = data
+
+    if enabled != 1:
+        return
+
+    try:
+        channel = member.guild.get_channel(int(channel_id))
+    except:
+        return
+
+    if channel is None:
+        return
+
+    msg = message.replace("{user}", member.mention)
+    msg = msg.replace("{server}", member.guild.name)
+
+    await channel.send(msg)
+
 # =========================
 # 事件防護
 # =========================
@@ -580,6 +615,7 @@ async def anti_status(interaction: discord.Interaction):
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
