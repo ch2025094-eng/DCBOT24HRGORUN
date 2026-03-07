@@ -12,6 +12,10 @@ TOKEN = os.getenv("TOKEN")
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+class AdminCommands(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
 # =========================
 # 資料庫連線
 # =========================
@@ -231,15 +235,6 @@ async def on_guild_update(before, after):
 # =========================
 # Slash 指令（全部有介紹）
 # =========================
-
-@bot.tree.command(name="設置日誌頻道", description="設定機器人發送違規與防護紀錄的頻道")
-async def set_log_channel(interaction: discord.Interaction, 頻道: discord.TextChannel):
-    ensure_guild_settings(interaction.guild.id)
-    cursor.execute("UPDATE settings SET log_channel_id=? WHERE guild_id=?",
-                   (頻道.id, interaction.guild.id))
-    db.commit()
-    await interaction.response.send_message(f"✅ 日誌頻道已設為 {頻道.mention}")
-
 @bot.tree.command(name="加入黑名單", description="將指定使用者加入黑名單")
 async def add_black(interaction: discord.Interaction, member: discord.Member):
     add_blacklist(member.id)
@@ -519,8 +514,47 @@ async def toggle_all_protection(interaction: discord.Interaction, state: str):
     await interaction.response.send_message(embed=embed)
 
 # =========================
+    # 設置違規懲罰訊息頻道
+    # =========================
+    @app_commands.command(
+        name="set_punish_channel",
+        description="設置違規懲罰訊息頻道，違規或踢出/禁言訊息將發送到此頻道"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def set_punish_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        guild_id = interaction.guild.id
+        cursor.execute("""
+            INSERT INTO settings (guild_id, punish_channel_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id) DO UPDATE SET punish_channel_id=excluded.punish_channel_id
+        """, (guild_id, channel.id))
+        db.commit()
+        await interaction.response.send_message(f"✅ 已將違規懲罰訊息頻道設置為 {channel.mention}", ephemeral=True)
+
+    # =========================
+    # 設置日誌頻道
+    # =========================
+    @app_commands.command(
+        name="set_log_channel",
+        description="設置日誌頻道，成員在伺服器的各種操作將被紀錄"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def set_log_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        guild_id = interaction.guild.id
+        cursor.execute("""
+            INSERT INTO settings (guild_id, log_channel_id)
+            VALUES (?, ?)
+            ON CONFLICT(guild_id) DO UPDATE SET log_channel_id=excluded.log_channel_id
+        """, (guild_id, channel.id))
+        db.commit()
+        await interaction.response.send_message(f"✅ 已將日誌頻道設置為 {channel.mention}", ephemeral=True)
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(AdminCommands(bot))
+# =========================
 
 bot.run(TOKEN)
+
 
 
 
