@@ -6,19 +6,6 @@ import os
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 import sqlite3
-conn = sqlite3.connect("bot.db", check_same_thread=False)
-cursor = conn.cursor()
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS welcome (
-    guild_id TEXT PRIMARY KEY,
-    enabled INTEGER DEFAULT 0,
-    channel_id TEXT,
-    message TEXT
-)
-""")
-
-conn.commit()
 
 TOKEN = os.getenv("TOKEN")
 
@@ -114,22 +101,28 @@ def add_blacklist(user_id):
     cursor.execute("INSERT OR IGNORE INTO blacklist (user_id) VALUES (?)", (user_id,))
     db.commit()
 
-async def punish_user(member, reason):
+# =========================
+# 懲罰用戶
+# =========================
+async def punish_user(member, reason, force_blacklist=False):
+    """
+    force_blacklist: 如果為 True，不管違規次數，直接列入黑名單
+    """
     if is_whitelisted(member.id):
+        # 白名單成員不受限制
         return
 
     ensure_guild_settings(member.guild.id)
 
     if is_blacklisted(member.id):
+        # 已在黑名單 -> 永久封鎖
         await member.ban(reason=f"黑名單再次違規: {reason}")
-
         cursor.execute("""
             UPDATE stats
             SET total_bans = total_bans + 1
             WHERE guild_id=?
         """, (member.guild.id,))
         db.commit()
-
         await send_log(
             member.guild,
             "🚫 黑名單再次違規",
@@ -137,18 +130,27 @@ async def punish_user(member, reason):
         )
         return
 
-    add_blacklist(member.id)
+    # 強制黑名單或違規達 3 次直接列入
+    if force_blacklist:
+        add_blacklist(member.id)
+        await member.kick(reason=reason)
+        await send_log(
+            member.guild,
+            "🛑 強制列入黑名單",
+            f"使用者: {member.mention}\n原因: {reason}\n處罰: 被踢出並列入黑名單"
+        )
+        return
 
+    # 否則，第一次違規 Timeout 60 秒 + 加入黑名單
     until = datetime.now(timezone.utc) + timedelta(seconds=60)
     await member.timeout(until, reason=reason)
-
+    add_blacklist(member.id)
     cursor.execute("""
         UPDATE stats
         SET total_timeouts = total_timeouts + 1
         WHERE guild_id=?
     """, (member.guild.id,))
     db.commit()
-
     await send_log(
         member.guild,
         "⚠ 使用者違規",
@@ -156,174 +158,85 @@ async def punish_user(member, reason):
     )
 
 # =========================
+# 事件違規檢查
+# =========================
+async def on_guild_event_violation(member, event_type):
+    """
+    檢查新增/刪除頻道、刪除角色、改伺服器名稱
+    """
+    if is_whitelisted(member.id):
+        return
+
+    guild_id = member.guild.id
+    cursor.execute("""
+        SELECT anti_channel_create, anti_channel_delete, anti_role_delete, anti_guild_rename
+        FROM settings
+        WHERE guild_id=?
+        LIMIT 1
+    """, (guild_id,))
+    settings = cursor.fetchone() or (0, 0, 0, 0)
+
+    trigger = False
+    if event_type == "新增頻道" and settings[0]:
+        trigger = True
+    elif event_type == "刪除頻道" and settings[1]:
+        trigger = True
+    elif event_type == "刪除角色" and settings[2]:
+        trigger = True
+    elif event_type == "修改伺服器名稱" and settings[3]:
+        trigger = True
+
+    if trigger:
+        reason = f"管理事件違規: {event_type}"
+        await punish_user(member, reason, force_blacklist=True)
+
+# =========================
+# 洗版/刷頻檢查
+# =========================
+async def on_message_violation(member, violation_type):
+    """
+    violation_type: '刷頻' 或 '洗版'
+    達 3 次直接列入黑名單
+    """
+    if is_whitelisted(member.id):
+        return
+
+    reason = f"{violation_type}違規達3次"
+    await punish_user(member, reason, force_blacklist=True)
+# =========================
 # 啟動
 # =========================
 @bot.event
 async def on_ready():
     await bot.tree.sync()
     print(f"🤖 已登入 {bot.user}")
-
-@bot.event
-async def on_member_join(member):
-
-    conn = sqlite3.connect("database.db")
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "SELECT enabled, channel_id, message FROM welcome WHERE guild_id=?",
-        (str(member.guild.id),)
-    )
-
-    data = cursor.fetchone()
-    conn.close()
-
-    if not data:
-        return
-
-    enabled, channel_id, message = data
-
-    if not enabled:
-        return
-
-    channel = member.guild.get_channel(int(channel_id))
-
-    if not channel:
-        return
-
-    message = message.replace("{user}", member.mention)
-    message = message.replace("{server}", member.guild.name)
-
-    await channel.send(message)
-
-@bot.event
-async def on_member_join(member):
-
-    conn = sqlite3.connect("database.db")
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "SELECT enabled, channel_id, message FROM welcome WHERE guild_id=?",
-        (str(member.guild.id),)
-    )
-
-    data = cursor.fetchone()
-    conn.close()
-
-    if not data:
-        return
-
-    enabled, channel_id, message = data
-
-    if enabled != 1:
-        return
-
-    try:
-        channel = member.guild.get_channel(int(channel_id))
-    except:
-        return
-
-    if channel is None:
-        return
-
-    msg = message.replace("{user}", member.mention)
-    msg = msg.replace("{server}", member.guild.name)
-
-    await channel.send(msg)
-
 # =========================
-# 事件防護
+# 事件防護區
 # =========================
 @bot.event
 async def on_guild_channel_create(channel):
-    ensure_guild_settings(channel.guild.id)
-
-    cursor.execute(
-        "SELECT anti_channel_create FROM settings WHERE guild_id=?",
-        (channel.guild.id,)
-    )
-    if cursor.fetchone()[0] == 0:
-        return
-
-    async for entry in channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_create):
-        user = entry.user
-        break
-    else:
-        return
-
-    if user.bot:
-        return
-
-    await punish_user(user, "未授權新增頻道")
-    await channel.delete()
+    for member in channel.guild.members:
+        if not member.bot:
+            await on_guild_event_violation(member, "新增頻道")
 
 @bot.event
 async def on_guild_channel_delete(channel):
-    ensure_guild_settings(channel.guild.id)
-
-    cursor.execute(
-        "SELECT anti_channel_delete FROM settings WHERE guild_id=?",
-        (channel.guild.id,)
-    )
-    if cursor.fetchone()[0] == 0:
-        return
-
-    async for entry in channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_delete):
-        user = entry.user
-        break
-    else:
-        return
-
-    if user.bot:
-        return
-
-    await punish_user(user, "未授權刪除頻道")
+    for member in channel.guild.members:
+        if not member.bot:
+            await on_guild_event_violation(member, "刪除頻道")
 
 @bot.event
 async def on_guild_role_delete(role):
-    ensure_guild_settings(role.guild.id)
-
-    cursor.execute(
-        "SELECT anti_role_delete FROM settings WHERE guild_id=?",
-        (role.guild.id,)
-    )
-    if cursor.fetchone()[0] == 0:
-        return
-
-    async for entry in role.guild.audit_logs(limit=1, action=discord.AuditLogAction.role_delete):
-        user = entry.user
-        break
-    else:
-        return
-
-    if user.bot:
-        return
-
-    await punish_user(user, "未授權刪除角色")
+    for member in role.guild.members:
+        if not member.bot:
+            await on_guild_event_violation(member, "刪除角色")
 
 @bot.event
 async def on_guild_update(before, after):
-    ensure_guild_settings(after.id)
-
-    cursor.execute(
-        "SELECT anti_guild_rename FROM settings WHERE guild_id=?",
-        (after.id,)
-    )
-    if cursor.fetchone()[0] == 0:
-        return
-
-    if before.name == after.name:
-        return
-
-    async for entry in after.audit_logs(limit=1, action=discord.AuditLogAction.guild_update):
-        user = entry.user
-        break
-    else:
-        return
-
-    if user.bot:
-        return
-
-    await punish_user(user, "未授權修改伺服器名稱")
+    if before.name != after.name:
+        for member in after.members:
+            if not member.bot:
+                await on_guild_event_violation(member, "修改伺服器名稱")
     
 # =========================
 # Slash 指令（全部有介紹）
@@ -636,6 +549,7 @@ async def anti_status(interaction: discord.Interaction):
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
