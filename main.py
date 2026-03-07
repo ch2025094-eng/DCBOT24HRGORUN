@@ -256,26 +256,21 @@ async def on_ready():
 # 事件防護區
 # =========================
 @bot.event
-async for entry in channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_create):
-    member = entry.user
-    await handle_violation(member, "新增頻道")
-    break
+async def on_guild_channel_create(channel):
+    await handle_guild_event(channel, "新增頻道")
+
 @bot.event
-async for entry in channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_create):
-    member = entry.user
-    await handle_violation(member, "刪除頻道")
-    break
+async def on_guild_channel_delete(channel):
+    await handle_guild_event(channel, "刪除頻道")
+
 @bot.event
-async for entry in channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_create):
-    member = entry.user
-    await handle_violation(member, "刪角色")
-    break
+async def on_guild_role_delete(role):
+    await handle_guild_event(role, "刪除角色")
+
 @bot.event
-async for entry in channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_create):
-    member = entry.user
-    await handle_violation(member, "改伺服器名稱")
-    break
-    
+async def on_guild_update(before, after):
+    if before.name != after.name:
+        await handle_guild_event(after, "修改伺服器名稱")
 # =========================
 # Slash 指令（全部有介紹）
 # =========================
@@ -606,6 +601,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
