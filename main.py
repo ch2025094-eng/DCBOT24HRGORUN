@@ -141,6 +141,12 @@ async def punish_user(member, reason, force_blacklist=False):
         )
         return
 
+    if is_blacklisted(member.id):
+    if not member.bot:
+        await member.kick(reason="黑名單成員")
+    else:
+        print(f"黑名單包含機器人 {member}，無法踢出")
+
     # 否則，第一次違規 Timeout 60 秒 + 加入黑名單
     until = datetime.now(timezone.utc) + timedelta(seconds=60)
     await member.timeout(until, reason=reason)
@@ -549,6 +555,7 @@ async def anti_status(interaction: discord.Interaction):
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
