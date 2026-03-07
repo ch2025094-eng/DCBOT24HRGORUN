@@ -106,6 +106,7 @@ async def send_punish_log(guild, title, description, color=discord.Color.red()):
 # =========================
 # 處理違規
 # =========================
+@bot.event
 async def punish_user(member: discord.Member, reason: str):
     guild = member.guild
 
@@ -156,6 +157,7 @@ async def punish_user(member: discord.Member, reason: str):
 # =========================
 # 事件檢測
 # =========================
+@bot.event
 async def handle_guild_event(member: discord.Member, event_type: str):
     """
     event_type: "新增頻道" / "刪除頻道" / "刪除角色" / "修改伺服器名稱"
@@ -186,6 +188,7 @@ async def handle_guild_event(member: discord.Member, event_type: str):
 # =========================
 # 事件日誌範例（所有行為都記錄）
 # =========================
+@bot.event
 async def log_member_action(member: discord.Member, action: str):
     """
     action: 成員任何行為描述，例如 "發送訊息" / "編輯訊息" / "加入語音頻道"
@@ -195,6 +198,7 @@ async def log_member_action(member: discord.Member, action: str):
 # =========================
 # 洗版/刷頻檢查
 # =========================
+@bot.event
 async def on_message_violation(member, violation_type):
     """
     violation_type: '刷頻' 或 '洗版'
@@ -216,21 +220,25 @@ async def on_ready():
 # 事件防護區
 # =========================
 @bot.event
-async def on_guild_channel_create(channel):
-    await handle_violation(channel.guild.me, "新增頻道", channel.guild)
-
+async for entry in channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_create):
+    member = entry.user
+    await handle_violation(member, "新增頻道")
+    break
 @bot.event
-async def on_guild_channel_delete(channel):
-    await handle_violation(channel.guild.me, "刪除頻道", channel.guild)
-
+async for entry in channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_create):
+    member = entry.user
+    await handle_violation(member, "刪除頻道")
+    break
 @bot.event
-async def on_guild_role_delete(role):
-    await handle_violation(role.guild.me, "刪角色", role.guild)
-
+async for entry in channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_create):
+    member = entry.user
+    await handle_violation(member, "刪角色")
+    break
 @bot.event
-async def on_guild_update(before, after):
-    if before.name != after.name:
-        await handle_violation(after.me, "改伺服器名稱", after)
+async for entry in channel.guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_create):
+    member = entry.user
+    await handle_violation(member, "改伺服器名稱")
+    break
     
 # =========================
 # Slash 指令（全部有介紹）
@@ -535,9 +543,13 @@ async def toggle_all_protection(interaction: discord.Interaction, state: str):
 )
 @app_commands.checks.has_permissions(administrator=True)
 async def set_punish_channel(interaction: discord.Interaction, channel: discord.TextChannel):
-    # 將頻道存入資料庫
-    cursor.execute("INSERT OR REPLACE INTO settings (guild_id, punish_channel_id) VALUES (?, ?)",
-                   (interaction.guild.id, channel.id))
+    # 確保 guild 有資料行
+    ensure_guild_settings(interaction.guild.id)
+    # 只更新 punish_channel_id，不會覆蓋其他欄位
+    cursor.execute(
+        "UPDATE settings SET punish_channel_id=? WHERE guild_id=?",
+        (channel.id, interaction.guild.id)
+    )
     db.commit()
     await interaction.response.send_message(f"✅ 已設置 {channel.mention} 為違規懲罰訊息頻道")
 
@@ -548,13 +560,17 @@ async def set_punish_channel(interaction: discord.Interaction, channel: discord.
 )
 @app_commands.checks.has_permissions(administrator=True)
 async def set_log_channel(interaction: discord.Interaction, channel: discord.TextChannel):
-    cursor.execute("INSERT OR REPLACE INTO settings (guild_id, log_channel_id) VALUES (?, ?)",
-                   (interaction.guild.id, channel.id))
+    ensure_guild_settings(interaction.guild.id)
+    cursor.execute(
+        "UPDATE settings SET log_channel_id=? WHERE guild_id=?",
+        (channel.id, interaction.guild.id)
+    )
     db.commit()
     await interaction.response.send_message(f"✅ 已設置 {channel.mention} 為日誌頻道")
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
