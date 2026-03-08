@@ -618,27 +618,33 @@ async def on_member_join(member):
 # =========================
 @bot.tree.command(name="加入黑名單", description="將指定使用者加入黑名單")
 @app_commands.checks.has_permissions(administrator=True)
-async def add_black(interaction: discord.Interaction, member: discord.Member):
+async def add_black(interaction: discord.Interaction, user: discord.User):
 
-    add_blacklist(member.id)
+    add_blacklist(user.id)
 
-    # 如果人在伺服器內就踢出
-    try:
-        await member.kick(reason="被加入黑名單")
-    except:
-        pass
+    # 如果他在伺服器就踢
+    member = interaction.guild.get_member(user.id)
+
+    if member:
+        try:
+            await member.kick(reason="被加入黑名單")
+        except:
+            pass
 
     await interaction.response.send_message(
-        f"🚫 {member.mention} 已加入黑名單並踢出伺服器"
+        f"🚫 {user.mention} 已加入黑名單並踢出伺服器"
     )
 
 @bot.tree.command(name="移除黑名單", description="將指定使用者移出黑名單")
 @app_commands.checks.has_permissions(administrator=True)
-async def remove_black(interaction: discord.Interaction, member: discord.Member):
-    cursor.execute("DELETE FROM blacklist WHERE user_id=?", (member.id,))
-    db.commit()
-    await interaction.response.send_message(f"✅ {member.mention} 已移出黑名單")
+async def remove_black(interaction: discord.Interaction, user: discord.User):
 
+    cursor.execute("DELETE FROM blacklist WHERE user_id = ?", (user.id,))
+    db.commit()
+
+    await interaction.response.send_message(
+        f"✅ {user.mention} 已從黑名單移除"
+    )
 @bot.tree.command(name="查看黑名單", description="查看全伺服器黑名單成員")
 @app_commands.checks.has_permissions(administrator=True)
 async def view_black(interaction: discord.Interaction):
@@ -953,6 +959,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
