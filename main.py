@@ -3,9 +3,15 @@ from discord.ext import commands
 from discord import app_commands
 import matplotlib.pyplot as plt
 import os
+import sqlite3
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
-import sqlite3
+import time
+
+user_messages = defaultdict(list)
+last_message = {}
+repeat_count = defaultdict(int)
+
 
 TOKEN = os.getenv("TOKEN")
 
@@ -558,6 +564,62 @@ async def on_message_violation(member, violation_type):
 
     reason = f"{violation_type}違規達3次"
     await punish_user(member, reason, force_blacklist=True)
+
+@bot.event
+async def on_message(message):
+
+    if message.author.bot or not message.guild:
+        return
+
+    user_id = message.author.id
+    now = time.time()
+
+    # ===== 訊息長度限制 =====
+if len(message.content) > 50:
+    try:
+        await message.delete()
+    except:
+        pass
+
+    await punish_user(message, "訊息過長 (超過50字)")
+    return
+
+    # ===== 防刷頻 =====
+    user_messages[user_id].append(now)
+
+    # 保留5秒內的訊息
+    user_messages[user_id] = [
+        t for t in user_messages[user_id] if now - t < 5
+    ]
+
+    if len(user_messages[user_id]) >= 5:
+        try:
+            await message.delete()
+        except:
+            pass
+
+        await punish_user(message, "刷頻 (5秒5條)")
+        return
+
+    # ===== 防洗版 =====
+    if last_message.get(user_id) == message.content:
+        repeat_count[user_id] += 1
+    else:
+        repeat_count[user_id] = 1
+
+    last_message[user_id] = message.content
+
+    if repeat_count[user_id] >= 3:
+        try:
+            await message.delete()
+        except:
+            pass
+
+        await punish_user(message, "洗版 (重複訊息)")
+        repeat_count[user_id] = 0
+        return
+
+    await bot.process_commands(message)
 # =========================
 # 啟動
 # =========================
@@ -959,6 +1021,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
