@@ -567,15 +567,11 @@ async def on_message_violation(member, violation_type):
 
 @bot.event
 async def on_message(message):
- await message.delete()
-    if message.author.bot or not message.guild:
+    if message.author.bot:
         return
 
-    user_id = message.author.id
-    now = time.time()
-
     # ===== 訊息長度限制 =====
-if len(message.content) > 50:
+if len(message.content) > 30:
     try:
         await message.delete()
     except:
@@ -1021,6 +1017,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
