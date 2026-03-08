@@ -565,56 +565,87 @@ async def on_message_violation(member, violation_type):
     reason = f"{violation_type}違規達3次"
     await punish_user(member, reason, force_blacklist=True)
 
-@bot.event
-async def on_message(message):
+# =========================
+# 假設以下函數已存在：
+# - is_whitelisted(user_id)
+# - is_blacklisted(user_id)
+# - add_blacklist(user_id)
+# - send_punish_log(guild, title, description, color)
+# - punish_user(member, reason)   # 用來累計違規或踢出黑名單
+# =========================
+
+# 用來記錄使用者訊息歷史（防刷/洗版）
+from collections import deque, defaultdict
+from datetime import datetime, timedelta
+
+# 每個使用者最近訊息時間/內容
+user_messages = defaultdict(lambda: deque(maxlen=3))  # 保留最近3則訊息
+
+async def check_message_violation(message: discord.Message):
+    """
+    檢查洗版 / 刷頻 / 超長訊息
+    洗版: 連續三則相同訊息
+    刷頻: 三則訊息 5 秒內
+    超長訊息: 超過50字
+    """
     if message.author.bot:
         return
-
-    # ===== 訊息長度限制 =====
-if len(message.content) > 30:
-    try:
-        await message.delete()
-    except:
-        pass
-
-    await punish_user(message, "訊息過長 (超過50字)")
-    return
-
-    # ===== 防刷頻 =====
-    user_messages[user_id].append(now)
-
-    # 保留5秒內的訊息
-    user_messages[user_id] = [
-        t for t in user_messages[user_id] if now - t < 5
-    ]
-
-    if len(user_messages[user_id]) >= 5:
-        try:
-            await message.delete()
-        except:
-            pass
-
-        await punish_user(message, "刷頻 (5秒5條)")
+    if is_whitelisted(message.author.id):
         return
 
-    # ===== 防洗版 =====
-    if last_message.get(user_id) == message.content:
-        repeat_count[user_id] += 1
-    else:
-        repeat_count[user_id] = 1
+    guild = message.guild
 
-    last_message[user_id] = message.content
-
-    if repeat_count[user_id] >= 3:
+    # 超長訊息
+    if len(message.content) > 50:
+        await punish_user(message.author, "超長訊息違規 (>50字)")
         try:
             await message.delete()
-        except:
+        except discord.Forbidden:
             pass
-
-        await punish_user(message, "洗版 (重複訊息)")
-        repeat_count[user_id] = 0
         return
 
+    # 記錄訊息
+    now = datetime.now()
+    msgs = user_messages[message.author.id]
+
+    # 防刷頻：3則訊息 5秒內
+    msgs.append((message.content, now))
+
+    # 檢查刷頻
+    if len(msgs) == 3:
+        times = [t for _, t in msgs]
+        if (times[-1] - times[0]).total_seconds() <= 5:
+            await punish_user(message.author, "刷頻違規")
+            for m_content, _ in msgs:
+                try:
+                    # 刪掉剛發的訊息
+                    await message.delete()
+                except discord.Forbidden:
+                    pass
+            msgs.clear()
+            return
+
+        # 檢查洗版（連續三則相同訊息）
+        contents = [c for c, _ in msgs]
+        if contents[0] == contents[1] == contents[2]:
+            await punish_user(message.author, "洗版違規")
+            for m_content, _ in msgs:
+                try:
+                    await message.delete()
+                except discord.Forbidden:
+                    pass
+            msgs.clear()
+            return
+
+# =========================
+# on_message 事件
+# =========================
+@bot.event
+async def on_message(message: discord.Message):
+    # 防刷頻 / 洗版 / 超長訊息檢查
+    await check_message_violation(message)
+
+    # 如果有其他 on_message 邏輯，記得加這行
     await bot.process_commands(message)
 # =========================
 # 啟動
@@ -1017,6 +1048,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
