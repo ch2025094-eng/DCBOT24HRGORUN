@@ -52,6 +52,13 @@ CREATE TABLE IF NOT EXISTS violation_counts (
     PRIMARY KEY (guild_id, user_id)
 )
 """)
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS stats (
+    guild_id INTEGER PRIMARY KEY,
+    total_timeouts INTEGER DEFAULT 0,
+    total_bans INTEGER DEFAULT 0
+)
+""")
 db.commit()
 
 # =========================
@@ -59,6 +66,7 @@ db.commit()
 # =========================
 def ensure_guild_settings(guild_id):
     cursor.execute("INSERT OR IGNORE INTO settings (guild_id) VALUES (?)", (guild_id,))
+    cursor.execute("INSERT OR IGNORE INTO stats (guild_id) VALUES (?)", (guild_id,))
     db.commit()
 
 def is_whitelisted(user_id):
@@ -155,9 +163,6 @@ async def punish_user(member: discord.Member, reason: str):
             await send_punish_log(guild, f"⚠ 使用者違規 ({count}/3)", f"{member.mention} 原因: {reason} → Timeout 60 秒")
 
 # =========================
-# 事件檢測
-# =========================
-# =========================
 # 防炸事件處理（新增/刪頻道、刪角色、改伺服器名稱）
 # =========================
 async def handle_guild_event(channel_or_role_or_guild, event_type: str):
@@ -221,15 +226,257 @@ async def handle_guild_event(channel_or_role_or_guild, event_type: str):
     await send_guild_log(guild,
                          f"管理事件觸發: {event_type}",
                          f"{actor.mention} ({actor.id}) 觸發事件: {event_type}")
-# =========================
-# 事件日誌範例（所有行為都記錄）
-# =========================
+
+# 日誌頻道
 @bot.event
-async def log_member_action(member: discord.Member, action: str):
-    """
-    action: 成員任何行為描述，例如 "發送訊息" / "編輯訊息" / "加入語音頻道"
-    """
-    await send_guild_log(member.guild, f"成員行為紀錄: {member}", action)
+async def on_message_delete(message):
+    if message.guild is None or message.author.bot:
+        return
+
+    cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id = ?", (message.guild.id,))
+    result = cursor.fetchone()
+
+    if not result or not result[0]:
+        return
+
+    log_channel = bot.get_channel(result[0])
+    if not log_channel:
+        return
+
+    embed = discord.Embed(
+        title="🗑 訊息被刪除",
+        color=discord.Color.red()
+    )
+    embed.add_field(name="使用者", value=message.author.mention)
+    embed.add_field(name="頻道", value=message.channel.mention)
+    embed.add_field(name="內容", value=message.content or "無內容", inline=False)
+
+    await log_channel.send(embed=embed)
+
+@bot.event
+async def on_message_edit(before, after):
+    if before.guild is None or before.author.bot:
+        return
+
+    if before.content == after.content:
+        return
+
+    cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id = ?", (before.guild.id,))
+    result = cursor.fetchone()
+
+    if not result or not result[0]:
+        return
+
+    log_channel = bot.get_channel(result[0])
+
+    embed = discord.Embed(
+        title="✏️ 訊息被編輯",
+        color=discord.Color.orange()
+    )
+    embed.add_field(name="使用者", value=before.author.mention)
+    embed.add_field(name="頻道", value=before.channel.mention)
+    embed.add_field(name="修改前", value=before.content or "無內容", inline=False)
+    embed.add_field(name="修改後", value=after.content or "無內容", inline=False)
+
+    await log_channel.send(embed=embed)
+
+@bot.event
+async def on_member_update(before, after):
+    if before.display_name == after.display_name:
+        return
+
+    cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id = ?", (before.guild.id,))
+    result = cursor.fetchone()
+
+    if not result or not result[0]:
+        return
+
+    log_channel = bot.get_channel(result[0])
+
+    embed = discord.Embed(
+        title="👤 成員改名",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="使用者", value=after.mention)
+    embed.add_field(name="修改前", value=before.display_name)
+    embed.add_field(name="修改後", value=after.display_name)
+
+    await log_channel.send(embed=embed)
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+
+    cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id = ?", (member.guild.id,))
+    result = cursor.fetchone()
+
+    if not result or not result[0]:
+        return
+
+    log_channel = bot.get_channel(result[0])
+
+    embed = discord.Embed(color=discord.Color.green())
+
+    if before.channel is None and after.channel is not None:
+        embed.title = "🔊 加入語音頻道"
+        embed.add_field(name="使用者", value=member.mention)
+        embed.add_field(name="頻道", value=after.channel.name)
+
+    elif before.channel is not None and after.channel is None:
+        embed.title = "🔇 離開語音頻道"
+        embed.add_field(name="使用者", value=member.mention)
+        embed.add_field(name="頻道", value=before.channel.name)
+
+    elif before.channel != after.channel:
+        embed.title = "🔁 切換語音頻道"
+        embed.add_field(name="使用者", value=member.mention)
+        embed.add_field(name="原頻道", value=before.channel.name)
+        embed.add_field(name="新頻道", value=after.channel.name)
+
+    else:
+        return
+
+    await log_channel.send(embed=embed)
+
+@bot.event
+async def on_member_join(member):
+
+    cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id = ?", (member.guild.id,))
+    result = cursor.fetchone()
+
+    if not result or not result[0]:
+        return
+
+    log_channel = bot.get_channel(result[0])
+
+    embed = discord.Embed(
+        title="🚪 成員加入",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="使用者", value=member.mention)
+    embed.add_field(name="帳號ID", value=member.id)
+
+    await log_channel.send(embed=embed)
+
+
+@bot.event
+async def on_member_remove(member):
+
+    cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id = ?", (member.guild.id,))
+    result = cursor.fetchone()
+
+    if not result or not result[0]:
+        return
+
+    log_channel = bot.get_channel(result[0])
+
+    embed = discord.Embed(
+        title="🚪 成員離開",
+        color=discord.Color.red()
+    )
+    embed.add_field(name="使用者", value=f"{member}")
+    embed.add_field(name="ID", value=member.id)
+
+    await log_channel.send(embed=embed)
+
+@bot.event
+async def on_member_ban(guild, user):
+
+    cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id = ?", (guild.id,))
+    result = cursor.fetchone()
+
+    if not result or not result[0]:
+        return
+
+    log_channel = bot.get_channel(result[0])
+
+    async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.ban):
+
+        embed = discord.Embed(
+            title="🔨 成員被封鎖",
+            color=discord.Color.dark_red()
+        )
+        embed.add_field(name="被封鎖", value=user)
+        embed.add_field(name="執行者", value=entry.user)
+
+        await log_channel.send(embed=embed)
+        break
+
+@bot.event
+async def on_member_remove(member):
+
+    cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id = ?", (member.guild.id,))
+    result = cursor.fetchone()
+
+    if not result or not result[0]:
+        return
+
+    log_channel = bot.get_channel(result[0])
+
+    async for entry in member.guild.audit_logs(limit=1, action=discord.AuditLogAction.kick):
+
+        if entry.target.id == member.id:
+
+            embed = discord.Embed(
+                title="👢 成員被踢出",
+                color=discord.Color.orange()
+            )
+            embed.add_field(name="被踢", value=member)
+            embed.add_field(name="執行者", value=entry.user)
+
+            await log_channel.send(embed=embed)
+            return
+
+@bot.event
+async def on_guild_channel_delete(channel):
+
+    guild = channel.guild
+
+    cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id = ?", (guild.id,))
+    result = cursor.fetchone()
+
+    if not result or not result[0]:
+        return
+
+    log_channel = bot.get_channel(result[0])
+
+    async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_delete):
+
+        embed = discord.Embed(
+            title="⚠️ 頻道被刪除",
+            color=discord.Color.red()
+        )
+        embed.add_field(name="頻道名稱", value=channel.name)
+        embed.add_field(name="執行者", value=entry.user)
+
+        await log_channel.send(embed=embed)
+        break
+
+@bot.event
+async def on_guild_role_delete(role):
+
+    guild = role.guild
+
+    cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id = ?", (guild.id,))
+    result = cursor.fetchone()
+
+    if not result or not result[0]:
+        return
+
+    log_channel = bot.get_channel(result[0])
+
+    async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.role_delete):
+
+        embed = discord.Embed(
+            title="⚠️ 身分組被刪除",
+            color=discord.Color.red()
+        )
+        embed.add_field(name="身分組", value=role.name)
+        embed.add_field(name="執行者", value=entry.user)
+
+        await log_channel.send(embed=embed)
+        break
+
+
     
 # =========================
 # 洗版/刷頻檢查
@@ -601,6 +848,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
