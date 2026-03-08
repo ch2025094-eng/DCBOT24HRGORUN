@@ -567,7 +567,7 @@ async def on_message_violation(member, violation_type):
 
 @bot.event
 async def on_message(message):
-
+ await message.delete()
     if message.author.bot or not message.guild:
         return
 
@@ -1021,6 +1021,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
