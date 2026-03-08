@@ -574,6 +574,35 @@ async def on_guild_role_delete(role):
 async def on_guild_update(before, after):
     if before.name != after.name:
         await handle_guild_event(after, "修改伺服器名稱")
+
+@bot.event
+async def on_member_join(member):
+
+    cursor.execute("SELECT user_id FROM blacklist WHERE user_id = ?", (member.id,))
+    result = cursor.fetchone()
+
+    if result:
+        try:
+            await member.kick(reason="黑名單使用者自動踢出")
+
+            cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id = ?", (member.guild.id,))
+            log = cursor.fetchone()
+
+            if log and log[0]:
+                log_channel = bot.get_channel(log[0])
+
+                embed = discord.Embed(
+                    title="🚫 黑名單使用者自動踢出",
+                    color=discord.Color.red()
+                )
+
+                embed.add_field(name="使用者", value=f"{member} ({member.id})")
+                embed.add_field(name="原因", value="黑名單使用者加入伺服器")
+
+                await log_channel.send(embed=embed)
+
+        except:
+            pass
 # =========================
 # Slash 指令（全部有介紹）
 # =========================
@@ -582,6 +611,17 @@ async def on_guild_update(before, after):
 async def add_black(interaction: discord.Interaction, member: discord.Member):
     add_blacklist(member.id)
     await interaction.response.send_message(f"🚫 {member.mention} 已加入黑名單")
+cursor.execute("INSERT OR IGNORE INTO blacklist (user_id) VALUES (?)", (user_id,))
+db.commit()
+
+for guild in bot.guilds:
+    member = guild.get_member(user_id)
+
+    if member:
+        try:
+            await member.kick(reason="被加入黑名單")
+        except:
+            pass
 
 @bot.tree.command(name="移除黑名單", description="將指定使用者移出黑名單")
 @app_commands.checks.has_permissions(administrator=True)
@@ -904,6 +944,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
