@@ -230,7 +230,8 @@ async def handle_guild_event(channel_or_role_or_guild, event_type: str):
 # 日誌頻道
 @bot.event
 async def on_message_delete(message):
-    if message.guild is None or message.author.bot:
+
+    if message.guild is None:
         return
 
     cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id = ?", (message.guild.id,))
@@ -243,13 +244,68 @@ async def on_message_delete(message):
     if not log_channel:
         return
 
+    deleter = "未知"
+
+    async for entry in message.guild.audit_logs(limit=5, action=discord.AuditLogAction.message_delete):
+        if entry.target.id == message.author.id:
+            deleter = entry.user
+            break
+
     embed = discord.Embed(
         title="🗑 訊息被刪除",
         color=discord.Color.red()
     )
-    embed.add_field(name="使用者", value=message.author.mention)
+
+    embed.add_field(name="訊息作者", value=f"{message.author} ({message.author.id})")
+    embed.add_field(name="刪除者", value=str(deleter))
     embed.add_field(name="頻道", value=message.channel.mention)
-    embed.add_field(name="內容", value=message.content or "無內容", inline=False)
+
+    embed.add_field(
+        name="訊息內容",
+        value=message.content if message.content else "（沒有文字內容）",
+        inline=False
+    )
+
+    await log_channel.send(embed=embed)
+
+@bot.event
+async def on_message_edit(before, after):
+
+    if before.guild is None:
+        return
+
+    if before.content == after.content:
+        return
+
+    cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id = ?", (before.guild.id,))
+    result = cursor.fetchone()
+
+    if not result or not result[0]:
+        return
+
+    log_channel = bot.get_channel(result[0])
+    if not log_channel:
+        return
+
+    embed = discord.Embed(
+        title="✏️ 訊息被編輯",
+        color=discord.Color.orange()
+    )
+
+    embed.add_field(name="使用者", value=f"{before.author} ({before.author.id})")
+    embed.add_field(name="頻道", value=before.channel.mention)
+
+    embed.add_field(
+        name="修改前",
+        value=before.content if before.content else "（沒有文字內容）",
+        inline=False
+    )
+
+    embed.add_field(
+        name="修改後",
+        value=after.content if after.content else "（沒有文字內容）",
+        inline=False
+    )
 
     await log_channel.send(embed=embed)
 
@@ -848,6 +904,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
