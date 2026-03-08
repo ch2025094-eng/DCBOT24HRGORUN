@@ -532,7 +532,17 @@ async def on_guild_role_delete(role):
         await log_channel.send(embed=embed)
         break
 
+@bot.event
+async def on_member_join(member):
 
+    cursor.execute("SELECT user_id FROM blacklist WHERE user_id = ?", (member.id,))
+    result = cursor.fetchone()
+
+    if result:
+        try:
+            await member.kick(reason="黑名單使用者自動踢出")
+        except:
+            pass
     
 # =========================
 # 洗版/刷頻檢查
@@ -609,19 +619,18 @@ async def on_member_join(member):
 @bot.tree.command(name="加入黑名單", description="將指定使用者加入黑名單")
 @app_commands.checks.has_permissions(administrator=True)
 async def add_black(interaction: discord.Interaction, member: discord.Member):
+
     add_blacklist(member.id)
-    await interaction.response.send_message(f"🚫 {member.mention} 已加入黑名單")
-cursor.execute("INSERT OR IGNORE INTO blacklist (user_id) VALUES (?)", (user_id,))
-db.commit()
 
-for guild in bot.guilds:
-    member = guild.get_member(user_id)
+    # 如果人在伺服器內就踢出
+    try:
+        await member.kick(reason="被加入黑名單")
+    except:
+        pass
 
-    if member:
-        try:
-            await member.kick(reason="被加入黑名單")
-        except:
-            pass
+    await interaction.response.send_message(
+        f"🚫 {member.mention} 已加入黑名單並踢出伺服器"
+    )
 
 @bot.tree.command(name="移除黑名單", description="將指定使用者移出黑名單")
 @app_commands.checks.has_permissions(administrator=True)
@@ -944,6 +953,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
