@@ -121,43 +121,46 @@ async def send_punish_log(guild, title, description, color=discord.Color.red()):
 # 處理違規
 # =========================
 async def punish_user(member, reason):
-    
-  guild = member.guild
-  user_id = member.id
 
-    # 違規次數
-cursor.execute("""
-    INSERT INTO violation_counts (guild_id, user_id, count)
-    VALUES (?, ?, 1)
-    ON CONFLICT(guild_id, user_id)
-    DO UPDATE SET count = count + 1
-    """, (guild_id, user_id))
+    guild = member.guild
+    guild_id = guild.id
+    user_id = member.id
 
-db.commit()
-
-    # ===== 新增這段（統計 Timeout 次數）=====
-cursor.execute("""
-    INSERT INTO stats (guild_id, total_timeouts)
-    VALUES (?, 1)
-    ON CONFLICT(guild_id)
-    DO UPDATE SET total_timeouts = total_timeouts + 1
-    """, (guild_id,))
-
-db.commit()
-
-if is_whitelisted(member.id):
+    # 白名單直接跳過
+    if is_whitelisted(member.id):
         return
 
+    # 違規次數
+    cursor.execute("""
+        INSERT INTO violation_counts (guild_id, user_id, count)
+        VALUES (?, ?, 1)
+        ON CONFLICT(guild_id, user_id)
+        DO UPDATE SET count = count + 1
+    """, (guild_id, user_id))
+
+    db.commit()
+
+    # ===== 統計 Timeout 次數 =====
+    cursor.execute("""
+        INSERT INTO stats (guild_id, total_timeouts)
+        VALUES (?, 1)
+        ON CONFLICT(guild_id)
+        DO UPDATE SET total_timeouts = total_timeouts + 1
+    """, (guild_id,))
+
+    db.commit()
+
+    # 黑名單處理
     if is_blacklisted(member.id):
         try:
             await member.kick(reason=f"黑名單成員違規: {reason}")
 
             cursor.execute("""
-            INSERT INTO stats (guild_id, total_bans)
-            VALUES (?, 1)
-            ON CONFLICT(guild_id)
-            DO UPDATE SET total_bans = total_bans + 1
-            """, (guild.id,))
+                INSERT INTO stats (guild_id, total_bans)
+                VALUES (?, 1)
+                ON CONFLICT(guild_id)
+                DO UPDATE SET total_bans = total_bans + 1
+            """, (guild_id,))
 
             db.commit()
 
@@ -167,14 +170,15 @@ if is_whitelisted(member.id):
                 "⚠ 無法踢出黑名單成員",
                 f"{member.mention} ({member.id})"
             )
-    else:
-        await send_punish_log(
-            guild,
-            "🚫 黑名單成員已踢出",
-            f"{member.mention} 原因: {reason}"
-        )
 
-    return
+        else:
+            await send_punish_log(
+                guild,
+                "🚫 黑名單成員已踢出",
+                f"{member.mention} 原因: {reason}"
+            )
+
+        return
 
     # 違規累計計數，達 3 次加入黑名單
     cursor.execute("""
@@ -1096,6 +1100,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
