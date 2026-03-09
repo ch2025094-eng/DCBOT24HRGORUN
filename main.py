@@ -145,7 +145,7 @@ cursor.execute("""
 
 db.commit()
 
-    if is_whitelisted(member.id):
+if is_whitelisted(member.id):
         return  # 白名單不受限制
 
     # 已經在黑名單，直接踢出
@@ -1098,6 +1098,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
