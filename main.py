@@ -191,43 +191,59 @@ async def punish_user(member, reason):
     cursor.execute("SELECT count FROM violation_counts WHERE guild_id=? AND user_id=?", (guild.id, member.id))
     count = cursor.fetchone()[0]
 
-if count >= 3:
-    add_blacklist(member.id)
+    if count >= 3:
+        add_blacklist(member.id)
 
-    try:
-        await member.kick(reason=f"累計違規 3 次加入黑名單: {reason}")
+        try:
+            await member.kick(reason=f"累計違規 3 次加入黑名單: {reason}")
 
-        cursor.execute("""
-        INSERT INTO stats (guild_id, total_bans)
-        VALUES (?, 1)
-        ON CONFLICT(guild_id)
-        DO UPDATE SET total_bans = total_bans + 1
-        """, (guild.id,))
-        db.commit()
+            cursor.execute("""
+                INSERT INTO stats (guild_id, total_bans)
+                VALUES (?, 1)
+                ON CONFLICT(guild_id)
+                DO UPDATE SET total_bans = total_bans + 1
+            """, (guild.id,))
+            db.commit()
 
-        await send_punish_log(
-            guild,
-            "🚫 成員累計違規達 3 次已踢出並加入黑名單",
-            f"{member.mention} 原因: {reason}"
-        )
+            await send_punish_log(
+                guild,
+                "🚫 成員累計違規達 3 次已踢出並加入黑名單",
+                f"{member.mention} 原因: {reason}"
+            )
 
-    except discord.Forbidden:
-        await send_punish_log(
-            guild,
-            "⚠ 無法踢出累計違規成員",
-            f"{member.mention} ({member.id})"
-        )
-        # 清除違規計數
-        cursor.execute("DELETE FROM violation_counts WHERE guild_id=? AND user_id=?", (guild.id, member.id))
-        db.commit()
+        except discord.Forbidden:
+            await send_punish_log(
+                guild,
+                "⚠ 無法踢出累計違規成員",
+                f"{member.mention} ({member.id})"
+            )
+
+            # 清除違規計數
+            cursor.execute(
+                "DELETE FROM violation_counts WHERE guild_id=? AND user_id=?",
+                (guild.id, member.id)
+            )
+            db.commit()
+
     else:
         until = datetime.now(timezone.utc) + timedelta(seconds=60)
+
         try:
             await member.timeout(until, reason=reason)
+
         except discord.Forbidden:
-            await send_punish_log(guild, "⚠ 無法禁言成員", f"{member.mention} 原因: {reason}")
+            await send_punish_log(
+                guild,
+                "⚠ 無法禁言成員",
+                f"{member.mention} 原因: {reason}"
+            )
+
         else:
-            await send_punish_log(guild, f"⚠ 使用者違規 ({count}/3)", f"{member.mention} 原因: {reason} → Timeout 60 秒")
+            await send_punish_log(
+                guild,
+                f"⚠ 使用者違規 ({count}/3)",
+                f"{member.mention} 原因: {reason} → Timeout 60 秒"
+            )
         
 # =========================
 # 防炸事件處理（新增/刪頻道、刪角色、改伺服器名稱）
@@ -1100,6 +1116,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
