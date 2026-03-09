@@ -120,8 +120,8 @@ async def send_punish_log(guild, title, description, color=discord.Color.red()):
 # =========================
 # 處理違規
 # =========================
-async def punish_user(message, reason):
-
+async def punish_user(member, reason):
+    
     guild_id = message.guild.id
     user_id = message.author.id
 
@@ -150,8 +150,8 @@ async def punish_user(message, reason):
 
     # 已經在黑名單，直接踢出
     if is_blacklisted(member.id):
-        try:
-            await member.kick(reason=f"黑名單成員違規: {reason}")
+    try:
+        await member.kick(reason=f"黑名單成員違規: {reason}")
 
         cursor.execute("""
         INSERT INTO stats (guild_id, total_bans)
@@ -161,11 +161,22 @@ async def punish_user(message, reason):
         """, (member.guild.id,))
 
         db.commit()
-        except discord.Forbidden:
-            await send_punish_log(guild, "⚠ 無法踢出黑名單成員", f"{member.mention} ({member.id})")
-        else:
-            await send_punish_log(guild, "🚫 黑名單成員已踢出", f"{member.mention} 原因: {reason}")
-        return
+
+    except discord.Forbidden:
+        await send_punish_log(
+            guild,
+            "⚠ 無法踢出黑名單成員",
+            f"{member.mention} ({member.id})"
+        )
+
+    else:
+        await send_punish_log(
+            guild,
+            "🚫 黑名單成員已踢出",
+            f"{member.mention} 原因: {reason}"
+        )
+
+    return
 
     # 違規累計計數，達 3 次加入黑名單
     cursor.execute("""
@@ -178,7 +189,7 @@ async def punish_user(message, reason):
     cursor.execute("SELECT count FROM violation_counts WHERE guild_id=? AND user_id=?", (guild.id, member.id))
     count = cursor.fetchone()[0]
 
-  if count >= 3:
+if count >= 3:
     add_blacklist(member.id)
 
     try:
@@ -598,20 +609,6 @@ async def on_member_join(member):
         except:
             pass
     
-# =========================
-# 洗版/刷頻檢查
-# =========================
-@bot.event
-async def on_message_violation(member, violation_type):
-    """
-    violation_type: '刷頻' 或 '洗版'
-    達 3 次直接列入黑名單
-    """
-    if is_whitelisted(member.id):
-        return
-
-    reason = f"{violation_type}違規達3次"
-    await punish_user(member, reason, force_blacklist=True)
 
 # =========================
 # 假設以下函數已存在：
@@ -696,21 +693,17 @@ async def on_message(message: discord.Message):
     # 如果有其他 on_message 邏輯，記得加這行
     await bot.process_commands(message)
 # =========================
-# 啟動
-# =========================
-@bot.event
-async def on_ready():
-    await bot.tree.sync()
-    print(f"🤖 已登入 {bot.user}")
-# =========================
 # Bot 啟動時自動初始化所有伺服器
 # =========================
 @bot.event
 async def on_ready():
-    print(f"Bot 已上線: {bot.user}")
+
+    print(f"🤖Bot 已上線: {bot.user}")
 
     for guild in bot.guilds:
         ensure_guild_settings(guild.id)
+
+    await bot.tree.sync()
 # =========================
 # 事件防護區
 # =========================
@@ -1105,6 +1098,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
