@@ -120,9 +120,30 @@ async def send_punish_log(guild, title, description, color=discord.Color.red()):
 # =========================
 # 處理違規
 # =========================
-@bot.event
-async def punish_user(member: discord.Member, reason: str):
-    guild = member.guild
+async def punish_user(message, reason):
+
+    guild_id = message.guild.id
+    user_id = message.author.id
+
+    # 違規次數
+    cursor.execute("""
+    INSERT INTO violation_counts (guild_id, user_id, count)
+    VALUES (?, ?, 1)
+    ON CONFLICT(guild_id, user_id)
+    DO UPDATE SET count = count + 1
+    """, (guild_id, user_id))
+
+    db.commit()
+
+    # ===== 新增這段（統計 Timeout 次數）=====
+    cursor.execute("""
+    INSERT INTO stats (guild_id, total_timeouts)
+    VALUES (?, 1)
+    ON CONFLICT(guild_id)
+    DO UPDATE SET total_timeouts = total_timeouts + 1
+    """, (guild_id,))
+
+    db.commit()
 
     if is_whitelisted(member.id):
         return  # 白名單不受限制
@@ -133,11 +154,13 @@ async def punish_user(member: discord.Member, reason: str):
             await member.kick(reason=f"黑名單成員違規: {reason}")
 
         cursor.execute("""
-UPDATE stats
-SET total_bans = total_bans + 1
-WHERE guild_id = ?
-""", (guild.id,))
-db.commit()
+        INSERT INTO stats (guild_id, total_bans)
+        VALUES (?, 1)
+        ON CONFLICT(guild_id)
+        DO UPDATE SET total_bans = total_bans + 1
+        """, (member.guild.id,))
+
+        db.commit()
         except discord.Forbidden:
             await send_punish_log(guild, "⚠ 無法踢出黑名單成員", f"{member.mention} ({member.id})")
         else:
@@ -174,12 +197,7 @@ db.commit()
             await send_punish_log(guild, "⚠ 無法禁言成員", f"{member.mention} 原因: {reason}")
         else:
             await send_punish_log(guild, f"⚠ 使用者違規 ({count}/3)", f"{member.mention} 原因: {reason} → Timeout 60 秒")
-        cursor.execute("""
-UPDATE stats
-SET total_timeouts = total_timeouts + 1
-WHERE guild_id = ?
-""", (message.guild.id,))
-db.commit()
+        
 # =========================
 # 防炸事件處理（新增/刪頻道、刪角色、改伺服器名稱）
 # =========================
@@ -1060,6 +1078,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
