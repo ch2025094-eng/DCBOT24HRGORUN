@@ -131,6 +131,12 @@ async def punish_user(member: discord.Member, reason: str):
     if is_blacklisted(member.id):
         try:
             await member.kick(reason=f"黑名單成員違規: {reason}")
+        cursor.execute("""
+UPDATE stats
+SET total_bans = total_bans + 1
+WHERE guild_id = ?
+""", (guild.id,))
+db.commit()
         except discord.Forbidden:
             await send_punish_log(guild, "⚠ 無法踢出黑名單成員", f"{member.mention} ({member.id})")
         else:
@@ -167,7 +173,12 @@ async def punish_user(member: discord.Member, reason: str):
             await send_punish_log(guild, "⚠ 無法禁言成員", f"{member.mention} 原因: {reason}")
         else:
             await send_punish_log(guild, f"⚠ 使用者違規 ({count}/3)", f"{member.mention} 原因: {reason} → Timeout 60 秒")
-
+        cursor.execute("""
+UPDATE stats
+SET total_timeouts = total_timeouts + 1
+WHERE guild_id = ?
+""", (message.guild.id,))
+db.commit()
 # =========================
 # 防炸事件處理（新增/刪頻道、刪角色、改伺服器名稱）
 # =========================
@@ -1048,6 +1059,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
