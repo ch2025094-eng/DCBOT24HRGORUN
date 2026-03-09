@@ -131,6 +131,7 @@ async def punish_user(member: discord.Member, reason: str):
     if is_blacklisted(member.id):
         try:
             await member.kick(reason=f"黑名單成員違規: {reason}")
+
         cursor.execute("""
 UPDATE stats
 SET total_bans = total_bans + 1
@@ -1059,6 +1060,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
