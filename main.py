@@ -122,8 +122,8 @@ async def send_punish_log(guild, title, description, color=discord.Color.red()):
 # =========================
 async def punish_user(member, reason):
     
-    guild_id = message.guild.id
-    user_id = message.author.id
+  guild = member.guild
+  user_id = member.id
 
     # 違規次數
     cursor.execute("""
@@ -1098,6 +1098,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
