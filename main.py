@@ -705,6 +705,15 @@ async def on_ready():
     await bot.tree.sync()
     print(f"🤖 已登入 {bot.user}")
 # =========================
+# Bot 啟動時自動初始化所有伺服器
+# =========================
+@bot.event
+async def on_ready():
+    print(f"Bot 已上線: {bot.user}")
+
+    for guild in bot.guilds:
+        ensure_guild_settings(guild.id)
+# =========================
 # 事件防護區
 # =========================
 @bot.event
@@ -1098,6 +1107,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
