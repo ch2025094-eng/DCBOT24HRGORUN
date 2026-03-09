@@ -133,7 +133,7 @@ cursor.execute("""
     DO UPDATE SET count = count + 1
     """, (guild_id, user_id))
 
-    db.commit()
+db.commit()
 
     # ===== 新增這段（統計 Timeout 次數）=====
 cursor.execute("""
@@ -143,7 +143,7 @@ cursor.execute("""
     DO UPDATE SET total_timeouts = total_timeouts + 1
     """, (guild_id,))
 
-    db.commit()
+db.commit()
 
     if is_whitelisted(member.id):
         return  # 白名單不受限制
@@ -160,7 +160,7 @@ cursor.execute("""
         DO UPDATE SET total_bans = total_bans + 1
         """, (member.guild.id,))
 
-        db.commit()
+    db.commit()
 
     except discord.Forbidden:
         await send_punish_log(
@@ -1098,6 +1098,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
