@@ -126,7 +126,7 @@ async def punish_user(member, reason):
   user_id = member.id
 
     # 違規次數
-    cursor.execute("""
+cursor.execute("""
     INSERT INTO violation_counts (guild_id, user_id, count)
     VALUES (?, ?, 1)
     ON CONFLICT(guild_id, user_id)
@@ -136,7 +136,7 @@ async def punish_user(member, reason):
     db.commit()
 
     # ===== 新增這段（統計 Timeout 次數）=====
-    cursor.execute("""
+cursor.execute("""
     INSERT INTO stats (guild_id, total_timeouts)
     VALUES (?, 1)
     ON CONFLICT(guild_id)
@@ -153,7 +153,7 @@ async def punish_user(member, reason):
     try:
         await member.kick(reason=f"黑名單成員違規: {reason}")
 
-        cursor.execute("""
+    cursor.execute("""
         INSERT INTO stats (guild_id, total_bans)
         VALUES (?, 1)
         ON CONFLICT(guild_id)
@@ -1098,6 +1098,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
