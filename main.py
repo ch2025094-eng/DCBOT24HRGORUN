@@ -180,6 +180,7 @@ async def punish_user(message, reason):
 
    if count >= 3:
     add_blacklist(member.id)
+
     try:
         await member.kick(reason=f"累計違規 3 次加入黑名單: {reason}")
 
@@ -191,16 +192,19 @@ async def punish_user(message, reason):
         )
 
     else:
-        # ✅ 統計踢出次數
         cursor.execute("""
         INSERT INTO stats (guild_id, total_bans)
         VALUES (?, 1)
         ON CONFLICT(guild_id)
         DO UPDATE SET total_bans = total_bans + 1
         """, (guild.id,))
-
         db.commit()
 
+        await send_punish_log(
+            guild,
+            "🚫 成員累計違規達 3 次已踢出並加入黑名單",
+            f"{member.mention} 原因: {reason}"
+        )
         await send_punish_log(
             guild,
             "🚫 成員累計違規達 3 次已踢出並加入黑名單",
@@ -1107,6 +1111,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
