@@ -145,7 +145,7 @@ cursor.execute("""
 
 db.commit()
 
-    if is_whitelisted(member.id):
+if is_whitelisted(member.id):
         return
 
     if is_blacklisted(member.id):
@@ -1096,6 +1096,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
