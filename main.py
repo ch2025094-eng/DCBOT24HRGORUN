@@ -145,30 +145,28 @@ cursor.execute("""
 
 db.commit()
 
-if is_whitelisted(member.id):
-        return  # 白名單不受限制
+    if is_whitelisted(member.id):
+        return
 
-    # 已經在黑名單，直接踢出
     if is_blacklisted(member.id):
-    try:
-        await member.kick(reason=f"黑名單成員違規: {reason}")
+        try:
+            await member.kick(reason=f"黑名單成員違規: {reason}")
 
-    cursor.execute("""
-        INSERT INTO stats (guild_id, total_bans)
-        VALUES (?, 1)
-        ON CONFLICT(guild_id)
-        DO UPDATE SET total_bans = total_bans + 1
-        """, (member.guild.id,))
+            cursor.execute("""
+            INSERT INTO stats (guild_id, total_bans)
+            VALUES (?, 1)
+            ON CONFLICT(guild_id)
+            DO UPDATE SET total_bans = total_bans + 1
+            """, (guild.id,))
 
-    db.commit()
+            db.commit()
 
-    except discord.Forbidden:
-        await send_punish_log(
-            guild,
-            "⚠ 無法踢出黑名單成員",
-            f"{member.mention} ({member.id})"
-        )
-
+        except discord.Forbidden:
+            await send_punish_log(
+                guild,
+                "⚠ 無法踢出黑名單成員",
+                f"{member.mention} ({member.id})"
+            )
     else:
         await send_punish_log(
             guild,
@@ -1098,6 +1096,7 @@ async def set_log_channel(interaction: discord.Interaction, channel: discord.Tex
 # =========================
 
 bot.run(TOKEN)
+
 
 
 
