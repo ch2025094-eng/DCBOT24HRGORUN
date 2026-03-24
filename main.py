@@ -27,7 +27,7 @@ class AdminCommands(commands.Cog):
 # =========================
 # 資料庫連線
 # =========================
-db = sqlite3.connect("database.db")
+sqlite3.connect("database.db", check_same_thread=False)
 cursor = db.cursor()
 
 # 建立必要資料表
