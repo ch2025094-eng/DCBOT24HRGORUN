@@ -2,6 +2,8 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use("Agg")
 import os
 import sqlite3
 from datetime import datetime, timezone, timedelta
@@ -351,46 +353,6 @@ async def on_message_delete(message):
 
     await log_channel.send(embed=embed)
 
-@bot.event
-async def on_message_edit(before, after):
-
-    if before.guild is None:
-        return
-
-    if before.content == after.content:
-        return
-
-    cursor.execute("SELECT log_channel_id FROM settings WHERE guild_id = ?", (before.guild.id,))
-    result = cursor.fetchone()
-
-    if not result or not result[0]:
-        return
-
-    log_channel = bot.get_channel(result[0])
-    if not log_channel:
-        return
-
-    embed = discord.Embed(
-        title="✏️ 訊息被編輯",
-        color=discord.Color.orange()
-    )
-
-    embed.add_field(name="使用者", value=f"{before.author} ({before.author.id})")
-    embed.add_field(name="頻道", value=before.channel.mention)
-
-    embed.add_field(
-        name="修改前",
-        value=before.content if before.content else "（沒有文字內容）",
-        inline=False
-    )
-
-    embed.add_field(
-        name="修改後",
-        value=after.content if after.content else "（沒有文字內容）",
-        inline=False
-    )
-
-    await log_channel.send(embed=embed)
 
 @bot.event
 async def on_message_edit(before, after):
