@@ -261,26 +261,38 @@ async def on_ready():
 # 全域白名單
 whitelist = set()
 
-if not any(c.name == "加入白名單" for c in bot.tree.walk_commands()):
-    @bot.tree.command(name="加入白名單", description="將使用者加入白名單")
-    @app_commands.describe(user="要加入白名單的使用者")
-    async def 加入白名單(interaction: discord.Interaction, user: discord.Member):
-        if user.id in whitelist:
-            await interaction.response.send_message(f"❌ {user} 已經在白名單中", ephemeral=True)
-        else:
-            whitelist.add(user.id)
-            await interaction.response.send_message(f"✅ {user} 已加入白名單", ephemeral=True)
+# 加入白名單
+@bot.tree.command(name="加入白名單", description="將使用者加入白名單")
+@app_commands.describe(user="要加入白名單的使用者")
+async def 加入白名單(interaction: discord.Interaction, user: discord.Member):
+    cursor.execute("INSERT OR IGNORE INTO whitelist (user_id) VALUES (?)", (user.id,))
+    conn.commit()
+    await interaction.response.send_message(f"✅ {user} 已加入白名單")
 
-if not any(c.name == "移除白名單" for c in bot.tree.walk_commands()):
-    @bot.tree.command(name="移除白名單", description="將使用者從白名單移除")
-    @app_commands.describe(user="要移除白名單的使用者")
-    async def 移除白名單(interaction: discord.Interaction, user: discord.Member):
-        if user.id in whitelist:
-            whitelist.remove(user.id)
-            await interaction.response.send_message(f"✅ {user} 已從白名單移除", ephemeral=True)
-        else:
-            await interaction.response.send_message(f"❌ {user} 不在白名單中", ephemeral=True)
+# 移除白名單
+@bot.tree.command(name="移除白名單", description="將使用者從白名單移除")
+@app_commands.describe(user="要移除白名單的使用者")
+async def 移除白名單(interaction: discord.Interaction, user: discord.Member):
+    cursor.execute("DELETE FROM whitelist WHERE user_id = ?", (user.id,))
+    conn.commit()
+    await interaction.response.send_message(f"✅ {user} 已從白名單移除")
 
+# 加入黑名單
+@bot.tree.command(name="加入黑名單", description="將使用者加入黑名單")
+@app_commands.describe(user="要加入黑名單的使用者")
+async def 加入黑名單(interaction: discord.Interaction, user: discord.Member):
+    cursor.execute("INSERT OR IGNORE INTO blacklist (user_id) VALUES (?)", (user.id,))
+    conn.commit()
+    await interaction.response.send_message(f"🚫 {user} 已加入黑名單")
+
+# 移除黑名單
+@bot.tree.command(name="移除黑名單", description="將使用者從黑名單移除")
+@app_commands.describe(user="要移除黑名單的使用者")
+async def 移除黑名單(interaction: discord.Interaction, user: discord.Member):
+    cursor.execute("DELETE FROM blacklist WHERE user_id = ?", (user.id,))
+    conn.commit()
+    await interaction.response.send_message(f"✅ {user} 已從黑名單移除")
+    
 @bot.tree.command(name="設置日誌頻道", description="設定伺服器日誌輸出頻道")
 @app_commands.checks.has_permissions(administrator=True)
 async def set_log(interaction: discord.Interaction, channel: discord.TextChannel):
