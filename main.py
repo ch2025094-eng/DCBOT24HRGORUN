@@ -250,14 +250,10 @@ async def on_guild_channel_delete(channel):
 
 @bot.event
 async def on_ready():
-    await bot.wait_until_ready()
-    try:
-        synced = await bot.tree.sync()
-        print(f"已同步 {len(synced)} 個斜線指令")
-    except Exception as e:
-        print(e)
-
-    print(f"登入成功：{bot.user}")
+    print(f"Bot 已登入：{bot.user}")
+    # 可選：清掉舊指令再同步
+    bot.tree.clear_commands(guild=None)
+    await bot.tree.sync()
 
 
 
