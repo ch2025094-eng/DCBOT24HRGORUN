@@ -343,24 +343,6 @@ async def raid(interaction: discord.Interaction, state: bool):
         f"🛡️ 防炸系統已 {'開啟' if state else '關閉'}"
     )
 
-@bot.tree.command(name="加入黑名單", description="將指定使用者加入黑名單")
-@app_commands.checks.has_permissions(administrator=True)
-async def add_black(interaction: discord.Interaction, member: discord.Member):
-    add_blacklist(member.id)
-
-    await interaction.response.send_message(
-        f"🚫 {member.mention} 已加入黑名單"
-    )
-
-@bot.tree.command(name="移除黑名單", description="將使用者從黑名單移除")
-@app_commands.checks.has_permissions(administrator=True)
-async def remove_black(interaction: discord.Interaction, user: discord.User):
-
-    remove_blacklist(user.id)
-
-    await interaction.response.send_message(
-        f"✅ {user.mention} 已移出黑名單"
-    )
 
 @bot.tree.command(name="查看設定", description="查看目前伺服器所有設定")
 async def view_settings(interaction: discord.Interaction):
