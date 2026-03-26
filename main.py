@@ -254,10 +254,10 @@ async def on_guild_channel_delete(channel):
 
 @bot.event
 async def on_ready():
-    print(f"Bot 已登入：{bot.user}")
-    # 可選：清掉舊指令再同步
-    bot.tree.clear_commands(guild=None)
+    print(f"Logged in as {bot.user}!")
+    # 同步所有 Slash 指令
     await bot.tree.sync()
+    print("Slash commands synced!")
 
 if not any(c.name == "加入白名單" for c in bot.tree.walk_commands()):
     @bot.tree.command(name="加入白名單", description="將使用者加入白名單")
