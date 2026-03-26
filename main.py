@@ -267,20 +267,6 @@ async def add_black(interaction: discord.Interaction, member: discord.Member):
     add_blacklist(member.id)
     await interaction.response.send_message(f"{member.mention} 已加入黑名單")
 
-@bot.tree.command(name="防炸開關", description="開啟或關閉防炸")
-@app_commands.checks.has_permissions(administrator=True)
-async def raid(interaction: discord.Interaction, state: bool):
-
-    cursor.execute("""
-    INSERT INTO settings (guild_id, anti_raid)
-    VALUES (?, ?)
-    ON CONFLICT(guild_id)
-    DO UPDATE SET anti_raid=excluded.anti_raid
-    """, (interaction.guild.id, int(state)))
-
-    db.commit()
-
-    await interaction.response.send_message(f"防炸：{state}")
 
 @bot.tree.command(name="設置日誌頻道", description="設定伺服器日誌輸出頻道")
 @app_commands.checks.has_permissions(administrator=True)
