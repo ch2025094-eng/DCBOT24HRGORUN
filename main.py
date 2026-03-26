@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 intents = discord.Intents.all()
 intents = discord.Intents.default()
+intents.message_content = True
 intents.guilds = True
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
