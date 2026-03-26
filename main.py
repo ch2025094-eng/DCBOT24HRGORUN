@@ -6,6 +6,9 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 intents = discord.Intents.all()
+intents = discord.Intents.default()
+intents.guilds = True
+intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ===== DB =====
@@ -255,13 +258,22 @@ async def on_ready():
     bot.tree.clear_commands(guild=None)
     await bot.tree.sync()
 
+if not any(c.name == "加入白名單" for c in bot.tree.walk_commands()):
+    @bot.tree.command(name="加入白名單", description="將使用者加入白名單")
+    @app_commands.describe(user="要加入白名單的使用者")
+    async def 加入白名單(interaction: discord.Interaction, user: discord.Member):
+        whitelist.add(user.id)
+        await interaction.response.send_message(f"✅ {user} 已加入白名單")
 
-
-@bot.tree.command(name="加入黑名單", description="將使用者加入黑名單")
-@app_commands.checks.has_permissions(administrator=True)
-async def add_black(interaction: discord.Interaction, member: discord.Member):
-    add_blacklist(member.id)
-    await interaction.response.send_message(f"{member.mention} 已加入黑名單")
+if not any(c.name == "移除白名單" for c in bot.tree.walk_commands()):
+    @bot.tree.command(name="移除白名單", description="將使用者從白名單移除")
+    @app_commands.describe(user="要移除白名單的使用者")
+    async def 移除白名單(interaction: discord.Interaction, user: discord.Member):
+        if user.id in whitelist:
+            whitelist.remove(user.id)
+            await interaction.response.send_message(f"✅ {user} 已從白名單移除")
+        else:
+            await interaction.response.send_message(f"❌ {user} 不在白名單中", ephemeral=True)
 
 
 @bot.tree.command(name="設置日誌頻道", description="設定伺服器日誌輸出頻道")
