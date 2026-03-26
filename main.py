@@ -254,17 +254,22 @@ async def on_guild_channel_delete(channel):
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}!")
-    # 同步所有 Slash 指令
     await bot.tree.sync()
-    print("Slash commands synced!")
+    print(f"{bot.user} 已同步 slash 指令！")
+
+
+# 全域白名單
+whitelist = set()
 
 if not any(c.name == "加入白名單" for c in bot.tree.walk_commands()):
     @bot.tree.command(name="加入白名單", description="將使用者加入白名單")
     @app_commands.describe(user="要加入白名單的使用者")
     async def 加入白名單(interaction: discord.Interaction, user: discord.Member):
-        whitelist.add(user.id)
-        await interaction.response.send_message(f"✅ {user} 已加入白名單")
+        if user.id in whitelist:
+            await interaction.response.send_message(f"❌ {user} 已經在白名單中", ephemeral=True)
+        else:
+            whitelist.add(user.id)
+            await interaction.response.send_message(f"✅ {user} 已加入白名單", ephemeral=True)
 
 if not any(c.name == "移除白名單" for c in bot.tree.walk_commands()):
     @bot.tree.command(name="移除白名單", description="將使用者從白名單移除")
@@ -272,10 +277,9 @@ if not any(c.name == "移除白名單" for c in bot.tree.walk_commands()):
     async def 移除白名單(interaction: discord.Interaction, user: discord.Member):
         if user.id in whitelist:
             whitelist.remove(user.id)
-            await interaction.response.send_message(f"✅ {user} 已從白名單移除")
+            await interaction.response.send_message(f"✅ {user} 已從白名單移除", ephemeral=True)
         else:
             await interaction.response.send_message(f"❌ {user} 不在白名單中", ephemeral=True)
-
 
 @bot.tree.command(name="設置日誌頻道", description="設定伺服器日誌輸出頻道")
 @app_commands.checks.has_permissions(administrator=True)
