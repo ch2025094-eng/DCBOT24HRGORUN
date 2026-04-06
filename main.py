@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import os
+import asyncio
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -10,6 +11,7 @@ async def on_ready():
     print(f"已上線：{bot.user}")
 
 async def load_cogs():
+    import os
     for file in os.listdir("./cogs"):
         if file.endswith(".py"):
             await bot.load_extension(f"cogs.{file[:-3]}")
@@ -17,9 +19,6 @@ async def load_cogs():
 async def main():
     async with bot:
         await load_cogs()
-        await bot.start("你的TOKEN")
+        await bot.start(os.getenv("DISCORD_TOKEN"))
 
-import asyncio
 asyncio.run(main())
-
-   
