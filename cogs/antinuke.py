@@ -10,6 +10,22 @@ class AntiNuke(commands.Cog):
         self.bot = bot
         self.spam = defaultdict(list)
 
+    async def send_log(guild, text):
+    from utils import load
+
+    data = load("database/logs.json")
+    gid = str(guild.id)
+
+    channel_id = data.get(gid, {}).get("channel")
+    if not channel_id:
+        return
+
+    channel = guild.get_channel(channel_id)
+    if not channel:
+        return
+
+    await channel.send(text)
+    
     # ------------------------
     # 🚫 防洗版
     # ------------------------
