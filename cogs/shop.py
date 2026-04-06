@@ -1,14 +1,6 @@
 import discord
 from discord.ext import commands
-import json
-
-def load(file):
-    with open(file, "r") as f:
-        return json.load(f)
-
-def save(file, data):
-    with open(file, "w") as f:
-        json.dump(data, f, indent=4)
+from utils import load, save
 
 class Shop(commands.Cog):
     def __init__(self, bot):
@@ -16,41 +8,41 @@ class Shop(commands.Cog):
 
     @commands.command()
     async def shop(self, ctx):
-        shop = load("database/shop.json")
-
+        shop_data = load("database/shop.json")
         msg = "🛒 商店列表：\n"
-        for item in shop:
-            msg += f"{item} - 💰 {shop[item]['price']}\n"
-
+        for item, info in shop_data.items():
+            msg += f"{item} - 💰 {info['price']}\n"
         await ctx.send(msg)
 
     @commands.command()
     async def buy(self, ctx, item_name):
-        shop = load("database/shop.json")
-        eco = load("database/economy.json")
-
+        shop_data = load("database/shop.json")
+        eco_data = load("database/economy.json")
         user = str(ctx.author.id)
 
-        if item_name not in shop:
+        if item_name not in shop_data:
             return await ctx.send("❌ 沒有這個商品")
 
-        if user not in eco:
-            eco[user] = {"money": 0}
+        if user not in eco_data:
+            eco_data[user] = {"money": 0}
 
-        price = shop[item_name]["price"]
-
-        if eco[user]["money"] < price:
+        price = shop_data[item_name]["price"]
+        if eco_data[user]["money"] < price:
             return await ctx.send("❌ 錢不夠")
 
-        eco[user]["money"] -= price
-        save("database/economy.json", eco)
+        eco_data[user]["money"] -= price
+        save("database/economy.json", eco_data)
 
-        # 給身分組
-        role = ctx.guild.get_role(shop[item_name]["role_id"])
-        if role:
+        role_id = int(shop_data[item_name]["role_id"])
+        role = ctx.guild.get_role(role_id)
+        if role is None:
+            return await ctx.send("❌ 找不到這個身分組 (ID 錯誤)")
+
+        try:
             await ctx.author.add_roles(role)
-
-        await ctx.send(f"✅ 購買成功：{item_name}")
+            await ctx.send(f"✅ 購買成功：{item_name}")
+        except Exception as e:
+            await ctx.send(f"❌ 發生錯誤：{e}")
 
 async def setup(bot):
     await bot.add_cog(Shop(bot))
