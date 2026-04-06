@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from utils import load, save
+from utils import load
 
 class RoleButtons(commands.Cog):
     def __init__(self, bot):
@@ -9,8 +9,7 @@ class RoleButtons(commands.Cog):
     @commands.command()
     async def setup_roles(self, ctx):
         """建立一個角色按鈕訊息"""
-        role_data = load("database/shop.json")  # 可以用 shop.json 當按鈕來源
-
+        role_data = load("database/shop.json")
         class RoleView(discord.ui.View):
             def __init__(self):
                 super().__init__(timeout=None)
@@ -27,7 +26,6 @@ class RoleButtons(commands.Cog):
                             await interaction.response.send_message(f"✅ 獲得 {role.name}", ephemeral=True)
                     button.callback = callback
                     self.add_item(button)
-
         await ctx.send("點擊按鈕領取身分組：", view=RoleView())
 
 async def setup(bot):
