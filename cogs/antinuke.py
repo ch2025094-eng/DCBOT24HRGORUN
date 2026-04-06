@@ -103,7 +103,32 @@ class AntiNuke(commands.Cog):
         if len(self.spam[user]) >= 5:
             await message.delete()
             await message.channel.send(f"🚫 {message.author.mention} 請勿洗版")
-    
+
+    @commands.Cog.listener()
+async def on_command(self, ctx):
+    global_data = load("database/global.json")
+    security = load("database/security.json")
+    gid = str(ctx.guild.id)
+
+    # 全域白名單（直接放行）
+    if ctx.author.id in global_data.get("whitelist", []):
+        return
+
+    # 全域黑名單（直接擋）
+    if ctx.author.id in global_data.get("blacklist", []):
+        raise commands.CheckFailure("你在全域黑名單")
+
+    # 伺服器白名單（如果有開 whitelist 模式）
+    whitelist = security.get(gid, {}).get("whitelist", [])
+    if whitelist:
+        if ctx.author.id not in whitelist:
+            raise commands.CheckFailure("你不在白名單")
+
+    # 伺服器黑名單
+    blacklist = security.get(gid, {}).get("blacklist", [])
+    if ctx.author.id in blacklist:
+        raise commands.CheckFailure("你被封鎖")
+        
     # ------------------------
     # 黑白名單（全域）
     # ------------------------
@@ -125,6 +150,67 @@ class AntiNuke(commands.Cog):
         save("database/global.json", data)
         await ctx.send("🌍 已移出全域黑名單")
 
+    @commands.command()
+async def globalblacklist(self, ctx):
+    data = load("database/global.json")
+    users = data.get("blacklist", [])
+
+    if not users:
+        return await ctx.send("🌍 全域黑名單是空的")
+
+    msg = "🌍 全域黑名單：\n"
+    for uid in users:
+        user = self.bot.get_user(uid)
+        name = user.name if user else f"未知用戶({uid})"
+        msg += f"- {name}\n"
+
+    await ctx.send(msg)
+
+    @commands.command()
+    @commands.is_owner()
+async def globalwhitelist_add(self, ctx, user: discord.User):
+    data = load("database/global.json")
+    data.setdefault("whitelist", [])
+
+    if user.id in data["whitelist"]:
+        return await ctx.send("❌ 已經在全域白名單")
+
+    data["whitelist"].append(user.id)
+    save("database/global.json", data)
+
+    await ctx.send(f"🤍 已加入全域白名單：{user}")
+
+    @commands.command()
+    @commands.is_owner()
+async def globalwhitelist_remove(self, ctx, user: discord.User):
+    data = load("database/global.json")
+
+    if user.id not in data.get("whitelist", []):
+        return await ctx.send("❌ 不在白名單")
+
+    data["whitelist"].remove(user.id)
+    save("database/global.json", data)
+
+    await ctx.send(f"🗑️ 已移出全域白名單：{user}")
+
+    @commands.command()
+async def globalwhitelist(self, ctx):
+    data = load("database/global.json")
+    users = data.get("whitelist", [])
+
+    if not users:
+        return await ctx.send("🤍 全域白名單是空的")
+
+    msg = "🤍 全域白名單：\n"
+    for uid in users:
+        user = self.bot.get_user(uid)
+        name = user.name if user else f"未知用戶({uid})"
+        msg += f"- {name}\n"
+
+    await ctx.send(msg)
+
+    
+    
     # ------------------------
     # 伺服器黑名單
     # ------------------------
@@ -145,6 +231,56 @@ class AntiNuke(commands.Cog):
 
         if ctx.author.id in data.get(gid, {}).get("blacklist", []):
             raise commands.CheckFailure("你被封鎖")
+
+@commands.command()
+async def blacklist(self, ctx):
+    data = load("database/security.json")
+    gid = str(ctx.guild.id)
+
+    users = data.get(gid, {}).get("blacklist", [])
+
+    if not users:
+        return await ctx.send("🚫 本伺服器黑名單是空的")
+
+    msg = "🚫 本伺服器黑名單：\n"
+    for uid in users:
+        user = self.bot.get_user(uid)
+        name = user.name if user else f"未知用戶({uid})"
+        msg += f"- {name}\n"
+
+    await ctx.send(msg)
+
+@commands.command()
+@commands.has_permissions(administrator=True)
+async def whitelist_add(self, ctx, user: discord.Member):
+    data = load("database/security.json")
+    gid = str(ctx.guild.id)
+
+    data.setdefault(gid, {}).setdefault("whitelist", [])
+
+    if user.id in data[gid]["whitelist"]:
+        return await ctx.send("❌ 已經在白名單")
+
+    data[gid]["whitelist"].append(user.id)
+    save("database/security.json", data)
+
+    await ctx.send(f"🤍 已加入伺服器白名單：{user}")
+
+@commands.command()
+@commands.has_permissions(administrator=True)
+async def whitelist_remove(self, ctx, user: discord.Member):
+    data = load("database/security.json")
+    gid = str(ctx.guild.id)
+
+    if user.id not in data.get(gid, {}).get("whitelist", []):
+        return await ctx.send("❌ 不在白名單")
+
+    data[gid]["whitelist"].remove(user.id)
+    save("database/security.json", data)
+
+    await ctx.send(f"🗑️ 已移出伺服器白名單：{user}")
+
+
 
 async def setup(bot):
     await bot.add_cog(AntiNuke(bot))
