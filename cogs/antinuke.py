@@ -3,7 +3,7 @@ from discord.ext import commands
 from collections import defaultdict
 import time
 
-DEV_ID = 你的ID  # 🔥 只允許你操作全域名單
+DEV_ID = 1442017307332182168  # 🔥 只允許你操作全域名單
 
 class AntiNuke(commands.Cog):
     def __init__(self, bot):
