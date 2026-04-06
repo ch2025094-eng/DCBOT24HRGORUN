@@ -76,17 +76,12 @@ class AntiNuke(commands.Cog):
             except:
                 pass
 
-            # 📜 記錄 log
-            log_channel_id = g_data.get("log_channel")
-            if log_channel_id:
-                log_channel = message.guild.get_channel(log_channel_id)
-                if log_channel:
-                    await log_channel.send(
-                        f"🚫 {message.author} 因洗版被踢出並加入伺服器黑名單"
-                    )
-
-            self.spam[user_id] = []
-
+    await send_log(
+    message.guild,
+    f"🚫 {message.author} 因洗版被踢出並加入黑名單"
+)
+    # 清空紀錄（避免一直觸發）
+        self.spam[user_id] = []
     # ------------------------
     # 💥 炸群偵測（簡化範例：大量刪頻道/建頻道）
     # ------------------------
@@ -128,6 +123,11 @@ class AntiNuke(commands.Cog):
             await guild.kick(user, reason="炸群")
         except:
             pass
+
+    await send_log(
+    guild,
+    f"💥 {user} 因炸群被踢出並加入全域黑名單"
+)
 
         # 📢 全域公告
         for g in self.bot.guilds:
@@ -247,6 +247,10 @@ async def globalblacklist_add(self, ctx, user: discord.User):
 
     save("database/global.json", data)
     await ctx.send(f"🚫 已加入全域黑名單：{user}")
+    await send_log(
+    ctx.guild,
+    f"🔧 {ctx.author} 將 {user} 加入全域黑名單"
+)
 
 
 @commands.command()
