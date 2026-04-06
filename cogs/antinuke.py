@@ -98,10 +98,10 @@ class AntiNuke(commands.Cog):
             except:
                 pass
 
-    # ------------------------
-    # 🚫 防洗版
-    # ------------------------
-    @commands.Cog.listener()
+# ------------------------
+# 🚫 防洗版
+# ------------------------
+@commands.Cog.listener()
 async def on_message(self, message):
     if message.author.bot or not message.guild:
         return
@@ -110,6 +110,8 @@ async def on_message(self, message):
     now = time.time()
 
     # 初始化
+    if not hasattr(self, "spam"):
+        self.spam = {}
     if user_id not in self.spam:
         self.spam[user_id] = []
 
@@ -144,7 +146,6 @@ async def on_message(self, message):
 
         # 清空紀錄（避免一直觸發）
         self.spam[user_id] = []
-
     # ------------------------
     # 🌍 全域黑白名單（限制指令）
     # ------------------------
