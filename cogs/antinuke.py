@@ -12,7 +12,6 @@ class AntiNuke(commands.Cog):
 
     async def send_log(guild, text):
         from utils import load 
-        
     data = load("database/logs.json")
     gid = str(guild.id)
 
