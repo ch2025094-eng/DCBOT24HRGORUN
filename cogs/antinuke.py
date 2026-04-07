@@ -11,8 +11,8 @@ class AntiNuke(commands.Cog):
         self.spam = defaultdict(list)
 
     async def send_log(guild, text):
-    from utils import load
-
+        from utils import load 
+        
     data = load("database/logs.json")
     gid = str(guild.id)
 
