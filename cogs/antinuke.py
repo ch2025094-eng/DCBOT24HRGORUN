@@ -11,8 +11,10 @@ class AntiNuke(commands.Cog):
         self.bot = bot
         self.spam = defaultdict(list)
 
-    # ✅ 修正 send_log
-    async def send_log(self, guild, text):
+    # =========================
+    # 📜 日誌（Embed版）
+    # =========================
+    async def send_log(self, guild, title, desc, color=discord.Color.red()):
         data = load("database/logs.json")
         gid = str(guild.id)
 
@@ -20,25 +22,32 @@ class AntiNuke(commands.Cog):
         if not channel_id:
             return
 
-        channel = guild.get_channel(channel_id)
-        if not channel:
+        ch = guild.get_channel(channel_id)
+        if not ch:
             return
 
-        await channel.send(text)
+        embed = discord.Embed(
+            title=title,
+            description=desc,
+            color=color,
+            timestamp=discord.utils.utcnow()
+        )
 
-    # ------------------------
+        await ch.send(embed=embed)
+
+    # =========================
     # 🚫 防洗版
-    # ------------------------
+    # =========================
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot or not message.guild:
             return
 
-        user_id = message.author.id
-        guild_id = str(message.guild.id)
+        uid = message.author.id
+        gid = str(message.guild.id)
         now = time.time()
 
-        g_data = load(f"database/guilds/{guild_id}.json")
+        g_data = load(f"database/guilds/{gid}.json")
         global_data = load("database/global.json")
 
         g_data.setdefault("blacklist", [])
@@ -46,19 +55,28 @@ class AntiNuke(commands.Cog):
         global_data.setdefault("blacklist", [])
         global_data.setdefault("whitelist", [])
 
-        # 白名單
-        if user_id in global_data["whitelist"] or user_id in g_data["whitelist"]:
+        # 🛡️ 白名單
+        if uid in global_data["whitelist"] or uid in g_data["whitelist"]:
             return
 
         # 記錄訊息
-        self.spam[user_id].append(now)
-        self.spam[user_id] = [t for t in self.spam[user_id] if now - t < 1]
+        self.spam[uid].append(now)
+        self.spam[uid] = [t for t in self.spam[uid] if now - t < 1]
 
-        if len(self.spam[user_id]) >= 5:
-            if user_id not in g_data["blacklist"]:
-                g_data["blacklist"].append(user_id)
-                save(f"database/guilds/{guild_id}.json", g_data)
+        # 🚫 洗版判定
+        if len(self.spam[uid]) >= 5:
 
+            # 加入全域黑名單
+            if uid not in global_data["blacklist"]:
+                global_data["blacklist"].append(uid)
+                save("database/global.json", global_data)
+
+            # 加入伺服器黑名單
+            if uid not in g_data["blacklist"]:
+                g_data["blacklist"].append(uid)
+                save(f"database/guilds/{gid}.json", g_data)
+
+            # 踢出
             try:
                 await message.guild.kick(message.author, reason="洗版")
             except:
@@ -66,14 +84,15 @@ class AntiNuke(commands.Cog):
 
             await self.send_log(
                 message.guild,
-                f"🚫 {message.author} 因洗版被踢出並加入黑名單"
+                "🚫 洗版偵測",
+                f"使用者：{message.author}\n動作：踢出 + 全域黑名單"
             )
 
-            self.spam[user_id] = []
+            self.spam[uid] = []
 
-    # ------------------------
+    # =========================
     # 💥 炸群偵測
-    # ------------------------
+    # =========================
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel):
         guild = channel.guild
@@ -86,27 +105,31 @@ class AntiNuke(commands.Cog):
         if not user:
             return
 
-        user_id = user.id
-        guild_id = str(guild.id)
+        uid = user.id
+        gid = str(guild.id)
 
-        g_data = load(f"database/guilds/{guild_id}.json")
+        g_data = load(f"database/guilds/{gid}.json")
         global_data = load("database/global.json")
 
         g_data.setdefault("blacklist", [])
         global_data.setdefault("blacklist", [])
         global_data.setdefault("whitelist", [])
 
-        if user_id in global_data["whitelist"]:
+        # 🛡️ 白名單
+        if uid in global_data["whitelist"]:
             return
 
-        if user_id not in global_data["blacklist"]:
-            global_data["blacklist"].append(user_id)
+        # 加入全域黑名單
+        if uid not in global_data["blacklist"]:
+            global_data["blacklist"].append(uid)
             save("database/global.json", global_data)
 
-        if user_id not in g_data["blacklist"]:
-            g_data["blacklist"].append(user_id)
-            save(f"database/guilds/{guild_id}.json", g_data)
+        # 加入伺服器黑名單
+        if uid not in g_data["blacklist"]:
+            g_data["blacklist"].append(uid)
+            save(f"database/guilds/{gid}.json", g_data)
 
+        # 踢出
         try:
             await guild.kick(user, reason="炸群")
         except:
@@ -114,12 +137,23 @@ class AntiNuke(commands.Cog):
 
         await self.send_log(
             guild,
-            f"💥 {user} 因炸群被踢出並加入全域黑名單"
+            "💥 炸群偵測",
+            f"使用者：{user}\n動作：踢出 + 全域黑名單"
         )
 
-    # ------------------------
+        # 📢 全服警告
+        for g in self.bot.guilds:
+            try:
+                if g.system_channel:
+                    await g.system_channel.send(
+                        f"⚠️ {user} 因炸群已被列入全域黑名單"
+                    )
+            except:
+                pass
+
+    # =========================
     # 🔧 全域黑名單（開發者）
-    # ------------------------
+    # =========================
     @commands.command()
     async def gblack(self, ctx, user: discord.User):
         if ctx.author.id != DEV_ID:
@@ -132,8 +166,12 @@ class AntiNuke(commands.Cog):
             data["blacklist"].append(user.id)
             save("database/global.json", data)
 
-            await ctx.send(f"已加入全域黑名單: {user}")
-            await self.send_log(ctx.guild, f"🔧 {ctx.author} 將 {user} 加入全域黑名單")
+            await ctx.send(f"🚫 已加入全域黑名單：{user}")
+            await self.send_log(
+                ctx.guild,
+                "🔧 管理操作",
+                f"{ctx.author} 將 {user} 加入全域黑名單"
+            )
 
     @commands.command()
     async def gunblack(self, ctx, user: discord.User):
@@ -146,7 +184,37 @@ class AntiNuke(commands.Cog):
             data["blacklist"].remove(user.id)
             save("database/global.json", data)
 
-            await ctx.send(f"已移除全域黑名單: {user}")
+            await ctx.send(f"🗑️ 已移出全域黑名單：{user}")
+
+    # =========================
+    # 🤍 全域白名單
+    # =========================
+    @commands.command()
+    async def gwhite(self, ctx, user: discord.User):
+        if ctx.author.id != DEV_ID:
+            return
+
+        data = load("database/global.json")
+        data.setdefault("whitelist", [])
+
+        if user.id not in data["whitelist"]:
+            data["whitelist"].append(user.id)
+            save("database/global.json", data)
+
+            await ctx.send(f"🤍 已加入全域白名單：{user}")
+
+    @commands.command()
+    async def gunwhite(self, ctx, user: discord.User):
+        if ctx.author.id != DEV_ID:
+            return
+
+        data = load("database/global.json")
+
+        if user.id in data.get("whitelist", []):
+            data["whitelist"].remove(user.id)
+            save("database/global.json", data)
+
+            await ctx.send(f"🗑️ 已移出全域白名單：{user}")
 
 async def setup(bot):
     await bot.add_cog(AntiNuke(bot))
