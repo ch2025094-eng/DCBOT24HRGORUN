@@ -58,11 +58,12 @@ class Logs(commands.Cog):
         return key in config.get("enabled", [])
 
     # ---------------- 設定 ----------------
-    @commands.command()
-    @commands.has_permissions(administrator=True)
-    async def logsetup(self, ctx, channel: discord.TextChannel):
+    # ✅ Slash 指令
+    @app_commands.command(name="logsetup", description="設定日誌頻道")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def logsetup(self, interaction: discord.Interaction, channel: discord.TextChannel):
         data = load("database/logs.json")
-        gid = str(ctx.guild.id)
+        gid = str(interaction.guild.id)
 
         data.setdefault(gid, {})
         data[gid]["channel"] = channel.id
@@ -71,11 +72,12 @@ class Logs(commands.Cog):
 
         embed = discord.Embed(
             title="📜 日誌設定",
-            description="請選擇您需要的日誌",
+            description="選擇要記錄的項目",
             color=discord.Color.blue()
         )
 
-        await ctx.send(embed=embed, view=LogView())
+        await interaction.response.send_message(embed=embed, view=LogView())
+
 
     # ---------------- 事件 ----------------
     @commands.Cog.listener()
