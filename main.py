@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands
-import asyncio
-import os
+import asyncio, os
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -9,7 +8,11 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def load_cogs():
     for file in os.listdir("./cogs"):
         if file.endswith(".py"):
-            await bot.load_extension(f"cogs.{file[:-3]}")
+            try:
+                await bot.load_extension(f"cogs.{file[:-3]}")
+                print(f"載入 {file}")
+            except Exception as e:
+                print(f"❌ {file} 載入失敗: {e}")
 
 @bot.event
 async def on_ready():
@@ -17,7 +20,7 @@ async def on_ready():
 
     try:
         synced = await bot.tree.sync()
-        print(f"已同步 {len(synced)} 個 Slash 指令")
+        print(f"Slash同步 {len(synced)} 個指令")
     except Exception as e:
         print(e)
 
